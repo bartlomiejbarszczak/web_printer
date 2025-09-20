@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print & Scan Manager</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="app-container">
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <i class="fas fa-print"></i>
+                <h1>Print & Scan Manager</h1>
+            </div>
+            <div class="status-indicators">
+                <div class="status-item" id="cups-status">
+                    <i class="fas fa-circle"></i>
+                    <span>CUPS</span>
+                </div>
+                <div class="status-item" id="sane-status">
+                    <i class="fas fa-circle"></i>
+                    <span>SANE</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="dashboard-grid">
+            <!-- Print Section -->
+            <div class="card print-card">
+                <div class="card-header">
+                    <i class="fas fa-print"></i>
+                    <h2>Printing</h2>
+                </div>
+                <div class="card-content">
+                    <div class="quick-stats">
+                        <div class="stat">
+                            <span class="stat-number" id="active-prints">0</span>
+                            <span class="stat-label">Active Jobs</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-number" id="total-printers">0</span>
+                            <span class="stat-label">Printers</span>
+                        </div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-primary" onclick="showPrintDialog()">
+                            <i class="fas fa-plus"></i>
+                            Print Document
+                        </button>
+                        <a href="/print" class="btn btn-secondary">
+                            <i class="fas fa-list"></i>
+                            Manage Jobs
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scan Section -->
+            <div class="card scan-card">
+                <div class="card-header">
+                    <i class="fas fa-scanner"></i>
+                    <h2>Scanning</h2>
+                </div>
+                <div class="card-content">
+                    <div class="quick-stats">
+                        <div class="stat">
+                            <span class="stat-number" id="active-scans">0</span>
+                            <span class="stat-label">Active Jobs</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-number" id="total-scanners">0</span>
+                            <span class="stat-label">Scanners</span>
+                        </div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-primary" onclick="showScanDialog()">
+                            <i class="fas fa-plus"></i>
+                            Start Scan
+                        </button>
+                        <a href="/scan" class="btn btn-secondary">
+                            <i class="fas fa-list"></i>
+                            Manage Scans
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="card activity-card">
+                <div class="card-header">
+                    <i class="fas fa-history"></i>
+                    <h2>Recent Activity</h2>
+                </div>
+                <div class="card-content">
+                    <div class="activity-list" id="recent-activity">
+                        <div class="activity-placeholder">
+                            <i class="fas fa-clock"></i>
+                            <p>No recent activity</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Info -->
+            <div class="card system-card">
+                <div class="card-header">
+                    <i class="fas fa-server"></i>
+                    <h2>System Info</h2>
+                </div>
+                <div class="card-content">
+                    <div class="system-info">
+                        <div class="info-item">
+                            <span class="info-label">Disk Space:</span>
+                            <span class="info-value" id="disk-space">Loading...</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Uptime:</span>
+                            <span class="info-value" id="uptime">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Print Dialog Modal -->
+<div id="print-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Print Document</h3>
+            <button class="close-btn" onclick="closePrintDialog()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <form id="print-form" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="print-file">Select File</label>
+                <input type="file" id="print-file" name="file" accept=".pdf,.doc,.docx,.txt,.jpg,.png" required>
+            </div>
+            <div class="form-group">
+                <label for="print-printer">Printer</label>
+                <select id="print-printer" name="printer">
+                    <option value="">Default Printer</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="print-copies">Copies</label>
+                    <input type="number" id="print-copies" name="copies" value="1" min="1" max="99">
+                </div>
+                <div class="form-group">
+                    <label for="print-pages">Pages</label>
+                    <input type="text" id="print-pages" name="pages" placeholder="e.g., 1-5,8">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="print-duplex" name="duplex">
+                        Double-sided
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="print-color" name="color" checked>
+                        Color
+                    </label>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closePrintDialog()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-print"></i>
+                    Print
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Scan Dialog Modal -->
+<div id="scan-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Start Scan</h3>
+            <button class="close-btn" onclick="closeScanDialog()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <form id="scan-form">
+            <div class="form-group">
+                <label for="scan-scanner">Scanner</label>
+                <select id="scan-scanner" name="scanner" required>
+                    <option value="">Select Scanner</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="scan-resolution">Resolution</label>
+                    <select id="scan-resolution" name="resolution">
+                        <option value="150">150 DPI</option>
+                        <option value="300" selected>300 DPI</option>
+                        <option value="600">600 DPI</option>
+                        <option value="1200">1200 DPI</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="scan-format">Format</label>
+                    <select id="scan-format" name="format">
+                        <option value="pdf" selected>PDF</option>
+                        <option value="jpeg">JPEG</option>
+                        <option value="png">PNG</option>
+                        <option value="tiff">TIFF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="scan-color-mode">Color Mode</label>
+                    <select id="scan-color-mode" name="color_mode">
+                        <option value="color" selected>Color</option>
+                        <option value="grayscale">Grayscale</option>
+                        <option value="monochrome">Monochrome</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="scan-page-size">Page Size</label>
+                    <select id="scan-page-size" name="page_size">
+                        <option value="a4" selected>A4</option>
+                        <option value="letter">Letter</option>
+                        <option value="legal">Legal</option>
+                        <option value="a3">A3</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeScanDialog()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-scanner"></i>
+                    Start Scan
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+</body>
+</html>

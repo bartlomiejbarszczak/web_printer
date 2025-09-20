@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print Manager - Print & Scan Manager</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="app-container">
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <i class="fas fa-print"></i>
+                <h1>Print Manager</h1>
+            </div>
+            <nav class="nav-links">
+                <a href="/" class="nav-link">
+                    <i class="fas fa-home"></i>
+                    Dashboard
+                </a>
+                <a href="/print" class="nav-link active">
+                    <i class="fas fa-print"></i>
+                    Print
+                </a>
+                <a href="/scan" class="nav-link">
+                    <i class="fas fa-scanner"></i>
+                    Scan
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="page-header">
+            <h2>Print Management</h2>
+            <button class="btn btn-primary" onclick="showPrintDialog()">
+                <i class="fas fa-plus"></i>
+                New Print Job
+            </button>
+        </div>
+
+        <!-- Printers Section -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-printer"></i>
+                <h3>Available Printers</h3>
+                <button class="btn btn-secondary btn-sm" onclick="refreshPrinters()">
+                    <i class="fas fa-refresh"></i>
+                    Refresh
+                </button>
+            </div>
+            <div class="card-content">
+                <div class="printers-grid" id="printers-grid">
+                    <div class="loading-placeholder">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Loading printers...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Print Jobs Section -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-list"></i>
+                <h3>Print Jobs</h3>
+                <div class="header-actions">
+                    <button class="btn btn-secondary btn-sm" onclick="refreshJobs()">
+                        <i class="fas fa-refresh"></i>
+                        Refresh
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="clearCompletedJobs()">
+                        <i class="fas fa-trash"></i>
+                        Clear Completed
+                    </button>
+                </div>
+            </div>
+            <div class="card-content">
+                <div class="table-container">
+                    <table id="jobs-table">
+                        <thead>
+                        <tr>
+                            <th>Job ID</th>
+                            <th>File</th>
+                            <th>Printer</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Progress</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody id="jobs-tbody">
+                        <tr>
+                            <td colspan="7" class="empty-state">
+                                <i class="fas fa-print"></i>
+                                <h3>No Print Jobs</h3>
+                                <p>Start printing to see jobs here</p>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Print Dialog Modal -->
+<div id="print-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>New Print Job</h3>
+            <button class="close-btn" onclick="closePrintDialog()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <form id="print-form" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="print-file">Select File *</label>
+                <input type="file" id="print-file" name="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png" required>
+                <small class="form-help">Supported: PDF, DOC, DOCX, TXT, JPG, PNG (Max 50MB)</small>
+            </div>
+
+            <div class="form-group">
+                <label for="print-printer">Printer</label>
+                <select id="print-printer" name="printer">
+                    <option value="">Loading printers...</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="print-copies">Copies</label>
+                    <input type="number" id="print-copies" name="copies" value="1" min="1" max="99">
+                </div>
+                <div class="form-group">
+                    <label for="print-pages">Pages</label>
+                    <input type="text" id="print-pages" name="pages" placeholder="e.g., 1-5,8">
+                    <small class="form-help">Leave empty for all pages</small>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="print-duplex" name="duplex">
+                        Double-sided printing
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="print-color" name="color" checked>
+                        Color printing
+                    </label>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closePrintDialog()">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="print-submit-btn">
+                    <i class="fas fa-print"></i>
+                    Start Printing
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="/static/js/main.js"></script>
+<script src="/static/js/print.js"></script>
+</body>
+</html>

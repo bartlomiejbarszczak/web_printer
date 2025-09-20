@@ -1,0 +1,24 @@
+[package]
+name = "web_printer"
+version = "0.1.0"
+edition = "2024"
+
+
+[dependencies]
+actix-web = "4.11"
+actix-files = "0.6.6"
+actix-multipart = "0.7.2"
+tokio = { version = "1.47.1", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.142"
+uuid = { version = "1.17.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+#tera = "1.20.0"
+env_logger = "0.11.8"
+log = "0.4.27"
+config = "0.15.13"
+futures-util = "0.3.31"
+mime = "0.3.17"
+tempfile = "3.20.0"
+lazy_static = "1.5.0"
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "uuid", "macros"] }
