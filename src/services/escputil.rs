@@ -1,4 +1,4 @@
-use std::process::Command;
+use tokio::process::Command;
 use crate::services::command_exists;
 use crate::services::cups::CupsService;
 
@@ -23,7 +23,7 @@ impl MaintenanceService {
     }
 }
 
-
+// TODO choose which printer to clean
 async fn execute_escputil(argument: &str) -> Result<(), String> {
     let service = CupsService::new();
 
@@ -35,12 +35,13 @@ async fn execute_escputil(argument: &str) -> Result<(), String> {
     let output = Command::new("escputil")
         .args(["-P", printer_name.as_str(), argument])
         .output()
+        .await
         .map_err(|e| {e.to_string()})?;
 
     if !output.status.success() {
         return match argument {
             "-n" => Err("Error during checking nozzle heads".to_string()),
-            "-c" => Err("Error during checking nozzle heads".to_string()),
+            "-c" => Err("Error during cleaning nozzle heads".to_string()),
             _ => Err("Error executing escputil".to_string()),
         }
     }

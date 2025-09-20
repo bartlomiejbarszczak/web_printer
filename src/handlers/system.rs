@@ -1,12 +1,13 @@
 use actix_web::{web, HttpResponse, Result};
 use actix_files::NamedFile;
 use std::path::PathBuf;
-
+use sqlx::SqlitePool;
 use crate::handlers::{json_success, internal_error, json_error};
-use crate::models::SystemStatus;
+use crate::models::{ScanJob, SystemStatus};
 use crate::services::cups::CupsService;
 use crate::services::sane::SaneService;
 use crate::services::escputil::MaintenanceService;
+use tokio::process::Command;
 
 
 /// GET / - Serve main dashboard page
@@ -51,6 +52,7 @@ pub async fn get_status() -> Result<HttpResponse> {
 
 /// GET /api/system/settings - Get system settings (placeholder)
 pub async fn get_settings() -> Result<HttpResponse> {
+    // TODO create table with default settings and store in database
     let settings = serde_json::json!({
         "default_resolution": 300,
         "auto_cleanup": true,
@@ -94,8 +96,6 @@ pub async fn nozzle_clean() -> Result<HttpResponse> {
         Err(e) => json_error(e),
     }
 }
-
-
 
 /// GET /api/files/uploads - List uploaded files
 pub async fn list_uploads() -> Result<HttpResponse> {
@@ -174,26 +174,24 @@ pub async fn list_scans() -> Result<HttpResponse> {
 }
 
 /// DELETE /api/files/scans/{filename} - Delete scan file
-pub async fn delete_scan(path: web::Path<String>) -> Result<HttpResponse> {
+pub async fn delete_scan(path: web::Path<String>, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
     let filename = path.into_inner();
+    let pool = pool.as_ref();
 
+    // ScanJob::remove_from_db().await;
+    
     match std::fs::remove_file(format!("scans/{}", filename)) {
         Ok(_) => json_success(format!("File {} deleted successfully", filename)),
         Err(e) => json_error(format!("Failed to delete upload: {}", e)),
     }
-
-    // TODO
-    //  remove record from database
+    
 }
 
 
 
 /// Helper function to get available disk space
 async fn get_disk_space() -> Option<u64> {
-    use std::process::Command;
-
-    // "df -m ." command to get disk space for current directory
-    match Command::new("df").args(["-m", "."]).output() {
+    match Command::new("df").args(["-m", "."]).output().await {
         Ok(output) if output.status.success() => {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines().skip(1) {

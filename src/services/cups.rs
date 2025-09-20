@@ -1,5 +1,4 @@
-use std::process::Command;
-use serde_json::to_string;
+use tokio::process::Command;
 use crate::models::{Printer, PrintJob};
 use crate::services::command_exists;
 
@@ -20,6 +19,7 @@ impl CupsService {
         let output = Command::new("lpstat")
             .args(["-p", "-d"])
             .output()
+            .await
             .map_err(|e| format!("Failed to execute lpstat: {}", e))?;
 
         if !output.status.success() {
@@ -82,6 +82,7 @@ impl CupsService {
         let output = Command::new("lpstat")
             .args(["-p", printer_name, "-v"])
             .output()
+            .await
             .ok()?;
 
         if output.status.success() {
@@ -103,6 +104,7 @@ impl CupsService {
         let output = Command::new("lpstat")
             .args(["-p", printer_name, "-l"])
             .output()
+            .await
             .ok()?;
 
         if output.status.success() {
@@ -146,7 +148,7 @@ impl CupsService {
         // Add the file to print
         cmd.arg(file_path);
 
-        let output = cmd.output()
+        let output = cmd.output().await
             .map_err(|e| format!("Failed to execute lp command: {}", e))?;
 
         if !output.status.success() {
@@ -156,48 +158,30 @@ impl CupsService {
 
         // Parse job ID from output
         let stdout = String::from_utf8_lossy(&output.stdout);
-        if let Some(job_id_str) = stdout.split_whitespace().last() {
-            job_id_str.parse::<i32>()
-                .map_err(|_| "Failed to parse job ID".to_string())
+
+        //request id is EPSON_L3110_Series-66 (1 file(s))
+        if let Some(job_id_str) = stdout.split_whitespace().nth(3) {
+            let id = job_id_str.split('-').last().unwrap().parse::<i32>();
+            log::info!("Request is like: {job_id_str}");
+            match id {
+                Ok(id) => Ok(id),
+                Err(e) => {
+                    log::error!("Failed to parse job id: {}", e);
+                    Err(format!("Prase ID error: {}", e))},
+            }
         } else {
             Err("No job ID returned".to_string())
         }
     }
 
-    // /// Get status of a specific print job
-    // pub async fn get_job_status(&self, job_id: i32) -> Result<String, String> {
-    //     let output = Command::new("lpstat")
-    //         .args(["-W", "completed", "-o"])
-    //         .output()
-    //         .map_err(|e| format!("Failed to execute lpstat: {}", e))?;
-    //
-    //     if !output.status.success() {
-    //         return Err("Failed to get job status".to_string());
-    //     }
-    //
-    //     let stdout = String::from_utf8_lossy(&output.stdout);
-    //     for line in stdout.lines() {
-    //         if line.contains(&job_id.to_string()) {
-    //             if line.contains("completed") {
-    //                 return Ok("completed".to_string());
-    //             } else if line.contains("printing") {
-    //                 return Ok("printing".to_string());
-    //             } else if line.contains("pending") {
-    //                 return Ok("queued".to_string());
-    //             } else if line.contains("stopped") {
-    //                 return Ok("failed".to_string());
-    //             }
-    //         }
-    //     }
-    //
-    //     // If job not found, it might be completed and removed from queue
-    //     Ok("completed".to_string())
-    // }
+
+    
     /// Get status of a specific print job
     pub async fn get_job_status(&self, job_id: i32) -> Result<String, String> {
         let active_output = Command::new("lpstat")
             .args(["-o"])
             .output()
+            .await
             .map_err(|e| format!("Failed to execute lpstat: {}", e))?;
 
         if active_output.status.success() {
@@ -216,6 +200,7 @@ impl CupsService {
         let completed_output = Command::new("lpstat")
             .args(["-W", "completed", "-o"])
             .output()
+            .await
             .map_err(|e| format!("Failed to execute lpstat: {}", e))?;
 
         if !completed_output.status.success() {
@@ -242,6 +227,7 @@ impl CupsService {
         let output = Command::new("cancel")
             .arg(format!("{}-{}",printer_name, job_id))
             .output()
+            .await
             .map_err(|e| format!("Failed to execute cancel command: {}", e))?;
 
         if !output.status.success() {
@@ -257,6 +243,7 @@ impl CupsService {
         let output = Command::new("lpstat")
             .arg("-o")
             .output()
+            .await
             .map_err(|e| format!("Failed to execute lpstat: {}", e))?;
 
         if !output.status.success() {

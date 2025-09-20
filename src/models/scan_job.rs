@@ -289,7 +289,7 @@ impl ScanJob {
         Ok(query.rows_affected())
     }
 
-    pub async fn remove_from_db(id: Uuid, pool: &SqlitePool) -> Result<u64, sqlx::Error> {
+    pub async fn remove_from_db_by_uuid(id: Uuid, pool: &SqlitePool) -> Result<u64, sqlx::Error> {
         let query = query_bind!(
             r#"
             DELETE FROM scan_jobs WHERE job_uuid = ?;

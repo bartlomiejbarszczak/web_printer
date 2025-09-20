@@ -1,4 +1,4 @@
-use std::process::Command;
+use tokio::process::Command;
 use crate::models::{Scanner, ScanJob};
 use crate::services::command_exists;
 
@@ -32,6 +32,7 @@ impl SaneService {
     pub async fn get_scanners(&self) -> Result<Vec<Scanner>, String> {
         let output = Command::new("sane-find-scanner")
             .output()
+            .await
             .map_err(|e| format!("Failed to execute sane-find-scanner: {}", e))?;
 
         if !output.status.success() {
@@ -73,6 +74,7 @@ impl SaneService {
         let output = Command::new("scanimage")
             .arg("-L")
             .output()
+            .await
             .map_err(|e| format!("Failed to execute scanimage: {}", e))?;
 
 
@@ -92,45 +94,6 @@ impl SaneService {
 
         Err("Couldnt find matching name".to_string())
     }
-
-
-    // /// Get scanners using scanimage -L command
-    // async fn get_scanners_from_scanimage(&self) -> Result<Vec<Scanner>, String> {
-    //     let output = Command::new("scanimage")
-    //         .arg("-L")
-    //         .output()
-    //         .map_err(|e| format!("Failed to execute scanimage: {}", e))?;
-    //
-    //     if !output.status.success() {
-    //         return Ok(Vec::new());
-    //     }
-    //
-    //     let stdout = String::from_utf8_lossy(&output.stdout);
-    //     let mut scanners = Vec::new();
-    //
-    //     for line in stdout.lines() {
-    //         if line.starts_with("device ") {
-    //             // "device `epson2:libusb:001:002' is a Epson PID 1142 flatbed scanner"
-    //             if let Some(quote_start) = line.find('`') {
-    //                 if let Some(quote_end) = line[quote_start + 1..].find('\'') {
-    //                     let device_name = &line[quote_start + 1..quote_start + 1 + quote_end];
-    //
-    //                     let desc_part = &line[quote_start + quote_end + 4..];
-    //                     let (vendor, model, device_type) = self.parse_scanner_description(desc_part);
-    //
-    //                     scanners.push(Scanner {
-    //                         name: device_name.to_string(),
-    //                         vendor,
-    //                         model,
-    //                         device_type,
-    //                     });
-    //                 }
-    //             }
-    //         }
-    //     }
-    //
-    //     Ok(scanners)
-    // }
 
     /// Extract vendor from scanner line
     fn extract_vendor_from_line(&self, line: &str) -> Option<String> {
@@ -155,31 +118,6 @@ impl SaneService {
         }
 
         None
-    }
-
-    /// Parse scanner description from scanimage output
-    fn parse_scanner_description(&self, desc: &str) -> (String, String, String) {
-        let parts: Vec<&str> = desc.split_whitespace().collect();
-
-        if parts.len() >= 2 {
-            let vendor = parts[0].to_string();
-            let model_end = parts.iter().position(|&x|
-                x == "flatbed" || x == "scanner" || x == "device"
-            ).unwrap_or(parts.len() - 1);
-
-            let model = parts[1..model_end].join(" ");
-            let device_type = if desc.contains("flatbed") {
-                "flatbed scanner"
-            } else if desc.contains("document") {
-                "document scanner"
-            } else {
-                "scanner"
-            }.to_string();
-
-            (vendor, model, device_type)
-        } else {
-            ("Unknown".to_string(), "Scanner".to_string(), "scanner".to_string())
-        }
     }
 
     /// Start a scan job
@@ -216,6 +154,7 @@ impl SaneService {
         cmd.args(["-o", &output_path]);
 
         let output = cmd.output()
+            .await
             .map_err(|e| format!("Failed to execute scanimage: {}", e))?;
 
         if !output.status.success() {

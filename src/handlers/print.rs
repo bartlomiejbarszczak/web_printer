@@ -51,12 +51,14 @@ pub async fn submit_print_job(mut payload: Multipart) -> Result<HttpResponse> {
         log::error!("Error reading multipart field: {}", e);
     }).unwrap_or(None) {
         let content_disposition = field.content_disposition().unwrap();
+        let field_name = content_disposition.get_name().map(|s| s.to_string());
+        let file_name = content_disposition.get_filename().map(|s| s.to_string());
 
-        if let Some(field_name) = content_disposition.get_name() {
+        if let Some(field_name) = field_name {
             if field_name == "file" {
                 // Handle file upload
-                if let Some(file_name) = content_disposition.get_filename() {
-                    filename = Some(file_name.to_string());
+                if let Some(file_name) = file_name {
+                    filename = Some(file_name);
                 }
 
                 let mut bytes = Vec::new();
@@ -67,7 +69,7 @@ pub async fn submit_print_job(mut payload: Multipart) -> Result<HttpResponse> {
                 }
                 file_data = Some(bytes);
             } else {
-                // Handle form fields
+                // Handle form fields - FIXED: Now properly using field_name
                 let mut field_data = Vec::new();
                 while let Some(chunk) = field.try_next().await.map_err(|e| {
                     log::error!("Error reading form field: {}", e);
@@ -76,23 +78,28 @@ pub async fn submit_print_job(mut payload: Multipart) -> Result<HttpResponse> {
                 }
 
                 if let Ok(value) = String::from_utf8(field_data) {
-                    // form_data.insert(field_name.to_string(), value); // Fixme
-                    form_data.insert("Dont know what is it".to_string(), value);
+                    form_data.insert(field_name, value);
                 }
             }
         }
     }
 
     // Validate required data
-    let file_data = file_data.ok_or_else(|| {
-        log::warn!("No file provided in print request");
-        "No file provided"
-    }).map_err(|e| json_error(e.to_string())).expect("No file provided"); //Fixme
+    let file_data = match file_data {
+        Some(data) => data,
+        None => {
+            log::warn!("No file provided in print request");
+            return json_error("No file provided".to_string());
+        }
+    };
 
-    let filename = filename.ok_or_else(|| {
-        log::warn!("No filename provided in print request");
-        "No filename provided"
-    }).map_err(|e| json_error(e.to_string())).expect("No filename provided"); //Fixme
+    let filename = match filename {
+        Some(name) => name,
+        None => {
+            log::warn!("No filename provided in print request");
+            return json_error("No filename provided".to_string());
+        }
+    };
 
     // Parse form data into PrintRequest
     let print_request = PrintRequest {
@@ -108,28 +115,75 @@ pub async fn submit_print_job(mut payload: Multipart) -> Result<HttpResponse> {
             .unwrap_or(true)),
     };
 
-    // Determine printer to use
-    let printer_name = if let Some(printer) = print_request.printer.clone() {
-        if printer.is_empty() {
+    // Get available printers first
+    let available_printers = match cups_service.get_printers().await {
+        Ok(printers) => printers,
+        Err(e) => {
+            log::error!("Failed to get available printers: {}", e);
+            return internal_error("Failed to get available printers".to_string());
+        }
+    };
+
+    if available_printers.is_empty() {
+        return json_error("No printers available".to_string());
+    }
+
+    // Determine printer to use with validation
+    let printer_name = if let Some(requested_printer) = print_request.printer.clone() {
+        if requested_printer.is_empty() {
             // Get default printer
-            match cups_service.get_printers().await {
-                Ok(printers) => {
-                    printers.into_iter()
-                        .find(|p| p.is_default)
-                        .map(|p| p.name)
-                        .unwrap_or_else(|| "default".to_string())
-                },
-                Err(_) => "default".to_string(),
-            }
+            available_printers.iter()
+                .find(|p| p.is_default)
+                .map(|p| p.name.clone())
+                .or_else(|| {
+                    // If no default, use first available
+                    available_printers.first().map(|p| p.name.clone())
+                })
+                .unwrap_or_else(|| {
+                    log::warn!("No default printer found, using 'default'");
+                    "default".to_string()
+                })
         } else {
-            printer
+            // Validate that the requested printer exists
+            if available_printers.iter().any(|p| p.name == requested_printer) {
+                requested_printer
+            } else {
+                let printer_names: Vec<String> = available_printers.iter().map(|p| p.name.clone()).collect();
+                log::warn!("Requested printer '{}' not found. Available printers: {:?}",
+                    requested_printer,
+                    printer_names
+                );
+                return json_error(format!(
+                    "Printer '{}' not found. Available printers: {}",
+                    requested_printer,
+                    printer_names.join(", ")
+                ));
+            }
         }
     } else {
-        "default".to_string()
+        // No printer specified, use default or first available
+        available_printers.iter()
+            .find(|p| p.is_default)
+            .map(|p| p.name.clone())
+            .or_else(|| {
+                available_printers.first().map(|p| p.name.clone())
+            })
+            .unwrap_or_else(|| {
+                log::warn!("No printers found, using 'default'");
+                "default".to_string()
+            })
     };
+
+    log::info!("Using printer: {}", printer_name);
 
     // Create print job
     let mut print_job = PrintJob::new(filename.clone(), printer_name, print_request);
+
+    // Create uploads directory if it doesn't exist
+    if let Err(e) = std::fs::create_dir_all("uploads") {
+        log::error!("Failed to create uploads directory: {}", e);
+        return internal_error("Failed to create uploads directory".to_string());
+    }
 
     // Save file to uploads directory
     let file_path = format!("uploads/{}", filename);
@@ -154,7 +208,8 @@ pub async fn submit_print_job(mut payload: Multipart) -> Result<HttpResponse> {
             json_success(serde_json::json!({
                 "job_id": job_id,
                 "cups_job_id": cups_job_id,
-                "status": "processing"
+                "status": "processing",
+                "printer": print_job.printer
             }))
         },
         Err(e) => {
