@@ -1,11 +1,12 @@
 pub mod print_job;
 pub mod scan_job;
 
+use chrono::{DateTime, TimeZone};
 pub use print_job::*;
 pub use scan_job::*;
 
 use serde::{Deserialize, Serialize};
-
+use tokio::time::Instant;
 
 #[macro_export]
 macro_rules! query_bind {
@@ -42,6 +43,12 @@ pub struct SystemStatus {
     pub active_print_jobs: usize,
     pub active_scan_jobs: usize,
     pub disk_space_mb: Option<u64>,
+    pub uptime_str: String
+}
+
+
+pub struct AppState {
+    pub start_time: Instant,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

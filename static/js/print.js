@@ -1,363 +1,516 @@
-// Print management JavaScript
-// Handles all print-related functionality
+// print.js - Print page specific functionality
 
-class PrintManager {
-    constructor() {
-        this.printers = [];
-        this.printJobs = [];
-        this.selectedFiles = [];
-        this.init();
+// Page state
+const PrintPage = {
+    jobs: [],
+    printers: [],
+    jobsRefreshInterval: null,
+    isSubmitting: false
+};
+
+// Initialize print page
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.location.pathname === '/print') {
+        initializePrintPage();
     }
+});
 
-    async init() {
-        await this.loadPrinters();
-        await this.loadPrintJobs();
-        this.setupEventListeners();
-        this.setupDropZone();
-        this.updateUI();
-    }
+async function initializePrintPage() {
+    await loadPrinters();
+    await loadPrintJobs();
+    setupPrintForm();
 
-    // Load available printers
-    async loadPrinters() {
-        try {
-            this.printers = await window.app.apiCall('/printers');
-            this.updatePrinterSelect();
-        } catch (error) {
-            console.error('Failed to load printers:', error);
-            window.app.showNotification('Failed to load printers', 'error');
-        }
-    }
+    // Start auto-refresh for jobs
+    PrintPage.jobsRefreshInterval = setInterval(loadPrintJobs, 5000); // Every 5 seconds
+}
 
-    // Load current print jobs
-    async loadPrintJobs() {
-        try {
-            this.printJobs = await window.app.apiCall('/print/jobs');
-            this.updateJobList();
-        } catch (error) {
-            console.error('Failed to load print jobs:', error);
-        }
-    }
-
-    // Update printer selection dropdown
-    updatePrinterSelect() {
-        const select = document.getElementById('printer-select');
-        if (!select) return;
-
-        select.innerHTML = '<option value="">Select Printer</option>';
-
-        this.printers.forEach(printer => {
-            const option = document.createElement('option');
-            option.value = printer.name;
-            option.textContent = `${printer.description} (${printer.status})`;
-            option.selected = printer.is_default;
-            select.appendChild(option);
-        });
-    }
-
-    // Setup event listeners
-    setupEventListeners() {
-        // File input handler
-        const fileInput = document.getElementById('file-input');
-        if (fileInput) {
-            fileInput.addEventListener('change', (e) => {
-                this.handleFileSelection(Array.from(e.target.files));
-            });
-        }
-
-        // Print form submission
-        const printForm = document.getElementById('print-form');
-        if (printForm) {
-            printForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.submitPrintJob();
-            });
-        }
-
-        // Files dropped event
-        document.addEventListener('filesDropped', (e) => {
-            if (e.detail.dropZone.id === 'print-drop-zone') {
-                this.handleFileSelection(e.detail.files);
-            }
-        });
-
-        // Clear files button
-        const clearBtn = document.getElementById('clear-files');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', () => {
-                this.clearSelectedFiles();
-            });
-        }
-
-        // Advanced options toggle
-        const advancedToggle = document.getElementById('advanced-toggle');
-        const advancedOptions = document.getElementById('advanced-options');
-        if (advancedToggle && advancedOptions) {
-            advancedToggle.addEventListener('click', () => {
-                advancedOptions.classList.toggle('hidden');
-                advancedToggle.textContent = advancedOptions.classList.contains('hidden')
-                    ? 'Show Advanced Options'
-                    : 'Hide Advanced Options';
-            });
-        }
-    }
-
-    // Setup drag and drop zone
-    setupDropZone() {
-        const dropZone = document.getElementById('print-drop-zone');
-        if (!dropZone) return;
-
-        dropZone.addEventListener('dragenter', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('drag-over');
-        });
-
-        dropZone.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            if (!dropZone.contains(e.relatedTarget)) {
-                dropZone.classList.remove('drag-over');
-            }
-        });
-
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('drag-over');
-        });
-
-        // Click to select files
-        dropZone.addEventListener('click', () => {
-            document.getElementById('file-input').click();
-        });
-    }
-
-    // Handle file selection
-    handleFileSelection(files) {
-        const allowedTypes = [
-            'application/pdf',
-            'image/jpeg',
-            'image/png',
-            'image/gif',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'text/plain'
-        ];
-
-        const validFiles = files.filter(file => {
-            if (!allowedTypes.includes(file.type)) {
-                window.app.showNotification(`File type not supported: ${file.name}`, 'warning');
-                return false;
-            }
-            return true;
-        });
-
-        this.selectedFiles = [...this.selectedFiles, ...validFiles];
-        this.updateFileList();
-    }
-
-    // Update selected files display
-    updateFileList() {
-        const fileList = document.getElementById('selected-files');
-        if (!fileList) return;
-
-        if (this.selectedFiles.length === 0) {
-            fileList.innerHTML = '<div class="no-files">No files selected</div>';
-            return;
-        }
-
-        fileList.innerHTML = this.selectedFiles.map((file, index) => `
-            <div class="file-item">
-                <div class="file-info">
-                    <div class="file-name">${file.name}</div>
-                    <div class="file-size">${window.app.formatFileSize(file.size)}</div>
-                </div>
-                <button type="button" class="remove-file" onclick="printManager.removeFile(${index})">
-                    ×
-                </button>
-            </div>
-        `).join('');
-    }
-
-    // Remove selected file
-    removeFile(index) {
-        this.selectedFiles.splice(index, 1);
-        this.updateFileList();
-    }
-
-    // Clear all selected files
-    clearSelectedFiles() {
-        this.selectedFiles = [];
-        this.updateFileList();
-        document.getElementById('file-input').value = '';
-    }
-
-    // Submit print job
-    async submitPrintJob() {
-        if (this.selectedFiles.length === 0) {
-            window.app.showNotification('Please select files to print', 'warning');
-            return;
-        }
-
-        const formData = new FormData();
-        const printer = document.getElementById('printer-select').value;
-        const copies = document.getElementById('copies').value || 1;
-        const pages = document.getElementById('pages').value;
-        const duplex = document.getElementById('duplex').checked;
-        const color = document.getElementById('color').checked;
-
-        // Add files
-        this.selectedFiles.forEach(file => {
-            formData.append('file', file);
-        });
-
-        // Add print options
-        if (printer) formData.append('printer', printer);
-        formData.append('copies', copies);
-        if (pages) formData.append('pages', pages);
-        formData.append('duplex', duplex);
-        formData.append('color', color);
-
-        try {
-            window.app.showProgressBar('print-progress', 0);
-
-            const result = await window.app.uploadFile('/print', formData);
-
-            window.app.showNotification(`Print job submitted successfully! Job ID: ${result.job_id}`, 'success');
-            this.clearSelectedFiles();
-
-            // Reset form
-            document.getElementById('print-form').reset();
-            this.updatePrinterSelect(); // Restore default selection
-
-            // Refresh job list
-            await this.loadPrintJobs();
-
-        } catch (error) {
-            console.error('Print job failed:', error);
-            window.app.showNotification('Failed to submit print job', 'error');
-        } finally {
-            window.app.hideProgressBar('print-progress');
-        }
-    }
-
-    // Update print jobs list
-    async updateJobList() {
-        try {
-            this.printJobs = await window.app.apiCall('/print/jobs');
-            this.renderJobList();
-        } catch (error) {
-            console.error('Failed to update job list:', error);
-        }
-    }
-
-    // Render jobs list in UI
-    renderJobList() {
-        const jobsList = document.getElementById('jobs-list');
-        if (!jobsList) return;
-
-        if (this.printJobs.length === 0) {
-            jobsList.innerHTML = '<div class="no-jobs">No print jobs</div>';
-            return;
-        }
-
-        jobsList.innerHTML = this.printJobs.map(job => `
-            <div class="job-item ${job.status}" data-job-id="${job.id}">
-                <div class="job-header">
-                    <div class="job-title">${job.document_name}</div>
-                    <div class="job-status status-${job.status}">${job.status}</div>
-                </div>
-                <div class="job-details">
-                    <div class="job-info">
-                        <span>Printer: ${job.printer}</span>
-                        <span>Copies: ${job.copies}</span>
-                        <span>Pages: ${job.pages || 'All'}</span>
-                    </div>
-                    <div class="job-time">${window.app.formatDateTime(job.created_at)}</div>
-                </div>
-                <div class="job-actions">
-                    ${job.status === 'pending' || job.status === 'processing' ?
-            `<button class="btn btn-danger btn-sm" onclick="printManager.cancelJob('${job.id}')">Cancel</button>` :
-            ''
-        }
-                    ${job.status === 'completed' || job.status === 'failed' ?
-            `<button class="btn btn-secondary btn-sm" onclick="printManager.removeJobFromList('${job.id}')">Remove</button>` :
-            ''
-        }
-                </div>
-            </div>
-        `).join('');
-    }
-
-    // Cancel a print job
-    async cancelJob(jobId) {
-        if (!confirm('Are you sure you want to cancel this print job?')) {
-            return;
-        }
-
-        try {
-            await window.app.apiCall(`/print/jobs/${jobId}`, { method: 'DELETE' });
-            window.app.showNotification('Print job cancelled', 'success');
-            await this.loadPrintJobs();
-        } catch (error) {
-            console.error('Failed to cancel job:', error);
-            window.app.showNotification('Failed to cancel print job', 'error');
-        }
-    }
-
-    // Remove job from display (for completed/failed jobs)
-    removeJobFromList(jobId) {
-        const jobElement = document.querySelector(`[data-job-id="${jobId}"]`);
-        if (jobElement) {
-            jobElement.remove();
-        }
-
-        // Also remove from local array
-        this.printJobs = this.printJobs.filter(job => job.id !== jobId);
-    }
-
-    // Get printer status summary
-    getPrinterStatusSummary() {
-        const online = this.printers.filter(p => p.status === 'idle' || p.status === 'printing').length;
-        const offline = this.printers.filter(p => p.status === 'offline').length;
-
-        return { online, offline, total: this.printers.length };
-    }
-
-    // Update UI elements
-    updateUI() {
-        const statusSummary = this.getPrinterStatusSummary();
-        const statusElement = document.getElementById('printer-status-summary');
-
-        if (statusElement) {
-            statusElement.innerHTML = `
-                <div class="status-summary">
-                    <div class="status-item">
-                        <span class="count">${statusSummary.online}</span>
-                        <span class="label">Online</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="count">${statusSummary.offline}</span>
-                        <span class="label">Offline</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="count">${statusSummary.total}</span>
-                        <span class="label">Total</span>
-                    </div>
-                </div>
-            `;
-        }
-    }
-
-    // Refresh all data
-    async refresh() {
-        await this.loadPrinters();
-        await this.loadPrintJobs();
-        this.updateUI();
-        window.app.showNotification('Print manager refreshed', 'info');
+// Load and display printers
+async function loadPrinters() {
+    try {
+        PrintPage.printers = await API.get('/printers');
+        displayPrinters();
+        populatePrinterDropdown();
+    } catch (error) {
+        console.error('Failed to load printers:', error);
+        showPrintersError();
     }
 }
 
-// Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.location.pathname === '/print') {
-        window.printManager = new PrintManager();
+function displayPrinters() {
+    const grid = document.getElementById('printers-grid');
+    if (!grid) return;
+
+    if (PrintPage.printers.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-printer"></i>
+                <h3>No Printers Available</h3>
+                <p>Check CUPS service and printer connections</p>
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = PrintPage.printers.map(printer => `
+        <div class="printer-card ${printer.is_default ? 'default' : ''} ${printer.status === 'idle' ? 'available' : 'busy'}">
+            <div class="printer-icon">
+                <i class="fas ${printer.is_default ? 'fa-star' : 'fa-printer'}"></i>
+            </div>
+            <div class="printer-info">
+                <h4>${printer.name}</h4>
+                <p class="printer-status">
+                    <span class="status-dot status-${printer.status}"></span>
+                    ${printer.status}${printer.is_default ? ' (Default)' : ''}
+                </p>
+                <p class="printer-description">${printer.description || 'No description available'}</p>
+                <p class="printer-location">${printer.location || 'No location set'}</p>
+            </div>
+            <div class="printer-actions">
+                <button class="btn btn-sm ${printer.status === 'idle' ? 'btn-primary' : 'btn-secondary'}" 
+                        onclick="quickPrint('${printer.name}')"
+                        ${printer.status !== 'idle' ? 'disabled' : ''}>
+                    <i class="fas fa-print"></i>
+                    Print
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function showPrintersError() {
+    const grid = document.getElementById('printers-grid');
+    if (grid) {
+        grid.innerHTML = `
+            <div class="error-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Failed to Load Printers</h3>
+                <p>Check CUPS service status</p>
+                <button class="btn btn-secondary" onclick="refreshPrinters()">
+                    <i class="fas fa-refresh"></i>
+                    Try Again
+                </button>
+            </div>
+        `;
+    }
+}
+
+function populatePrinterDropdown() {
+    const select = document.getElementById('print-printer');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Default Printer</option>';
+
+    PrintPage.printers.forEach(printer => {
+        const option = document.createElement('option');
+        option.value = printer.name;
+        option.textContent = `${printer.name}${printer.is_default ? ' (Default)' : ''}`;
+        if (printer.is_default) option.selected = true;
+        select.appendChild(option);
+    });
+}
+
+// Load and display print jobs
+async function loadPrintJobs() {
+    try {
+        const jobs = await API.get('/print/jobs');
+        PrintPage.jobs = jobs;
+        displayPrintJobs();
+    } catch (error) {
+        console.error('Failed to load print jobs:', error);
+        showJobsError();
+    }
+}
+
+function displayPrintJobs() {
+    const tbody = document.getElementById('jobs-tbody');
+    if (!tbody) return;
+
+    if (PrintPage.jobs.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="empty-state">
+                    <i class="fas fa-print"></i>
+                    <h3>No Print Jobs</h3>
+                    <p>Start printing to see jobs here</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = PrintPage.jobs.map(job => `
+        <tr class="job-row job-${job.status.toLowerCase()}">
+            <td>
+                <code class="job-id" title="${job.id}">${Utils.formatJobId(job.id)}</code>
+            </td>
+            <td>
+                <span class="filename" title="${job.filename}">${job.filename}</span>
+            </td>
+            <td>
+                <span class="printer-name">${job.printer}</span>
+            </td>
+            <td>
+                <span class="status-badge status-${job.status.toLowerCase()}">
+                    <i class="fas ${getStatusIcon(job.status)}"></i>
+                    ${job.status}
+                </span>
+            </td>
+            <td>
+                <span class="job-time" title="${new Date(job.created_at).toLocaleString()}">
+                    ${timeAgo(job.created_at)}
+                </span>
+            </td>
+            <td>
+                <div class="progress-container">
+                    ${getJobProgress(job)}
+                </div>
+            </td>
+            <td>
+                <div class="job-actions">
+                    ${getJobActions(job)}
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function showJobsError() {
+    const tbody = document.getElementById('jobs-tbody');
+    if (tbody) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="error-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Failed to load jobs
+                    <button class="btn btn-sm btn-secondary" onclick="refreshJobs()">Retry</button>
+                </td>
+            </tr>
+        `;
+    }
+}
+
+function getStatusIcon(status) {
+    const icons = {
+        'queued': 'fa-clock',
+        'processing': 'fa-spinner fa-spin',
+        'printing': 'fa-print',
+        'completed': 'fa-check-circle',
+        'failed': 'fa-exclamation-circle',
+        'cancelled': 'fa-times-circle'
+    };
+    return icons[status.toLowerCase()] || 'fa-question-circle';
+}
+
+function getJobProgress(job) {
+    const status = job.status.toLowerCase();
+
+    if (status === 'completed') {
+        return '<div class="progress-bar"><div class="progress-fill" style="width: 100%"></div></div>';
+    } else if (status === 'failed' || status === 'cancelled') {
+        return '<div class="progress-bar error"><div class="progress-fill" style="width: 100%"></div></div>';
+    } else if (status === 'printing') {
+        return '<div class="progress-bar active"><div class="progress-fill" style="width: 75%"></div></div>';
+    } else if (status === 'processing') {
+        return '<div class="progress-bar active"><div class="progress-fill" style="width: 25%"></div></div>';
+    } else {
+        return '<div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>';
+    }
+}
+
+function getJobActions(job) {
+    const status = job.status.toLowerCase();
+    let actions = [];
+
+    // View details button
+    actions.push(`
+        <button class="btn btn-sm btn-secondary" onclick="viewJobDetails('${job.id}')" title="View Details">
+            <i class="fas fa-info-circle"></i>
+        </button>
+    `);
+
+    // Cancel button (only for active jobs)
+    if (['queued', 'processing', 'printing'].includes(status)) {
+        actions.push(`
+            <button class="btn btn-sm btn-danger" onclick="cancelJob('${job.id}')" title="Cancel Job">
+                <i class="fas fa-times"></i>
+            </button>
+        `);
+    }
+
+    // Delete button (for completed/failed jobs)
+    if (['completed', 'failed', 'cancelled'].includes(status)) {
+        actions.push(`
+            <button class="btn btn-sm btn-danger" onclick="deleteJob('${job.id}')" title="Delete Job">
+                <i class="fas fa-trash"></i>
+            </button>
+        `);
+    }
+
+    return actions.join('');
+}
+
+function timeAgo(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+}
+
+// Setup print form
+function setupPrintForm() {
+    const form = document.getElementById('print-form');
+    if (!form) return;
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        if (PrintPage.isSubmitting) return;
+        PrintPage.isSubmitting = true;
+
+        const submitBtn = document.getElementById('print-submit-btn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Printing...';
+        submitBtn.disabled = true;
+
+        try {
+            const formData = new FormData(form);
+            const result = await API.postForm('/print', formData);
+
+            Toast.success(`Print job submitted: ${result.job_id.substring(0, 8)}...`);
+            closePrintDialog();
+            form.reset();
+
+            // Refresh jobs immediately
+            await loadPrintJobs();
+
+        } catch (error) {
+            Toast.error(`Print failed: ${error.message}`);
+        } finally {
+            PrintPage.isSubmitting = false;
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+
+    // File input validation
+    const fileInput = document.getElementById('print-file');
+    if (fileInput) {
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const maxSize = 50 * 1024 * 1024; // 50MB
+                if (file.size > maxSize) {
+                    Toast.error('File size must be less than 50MB');
+                    fileInput.value = '';
+                    return;
+                }
+
+                const allowedTypes = [
+                    'application/pdf',
+                    'application/msword',
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'text/plain',
+                    'image/jpeg',
+                    'image/png'
+                ];
+
+                if (!allowedTypes.includes(file.type)) {
+                    Toast.error('Unsupported file type. Please use PDF, DOC, DOCX, TXT, JPG, or PNG.');
+                    fileInput.value = '';
+                }
+            }
+        });
+    }
+}
+
+// Action functions
+async function refreshPrinters() {
+    const button = event.target;
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    button.disabled = true;
+
+    try {
+        await loadPrinters();
+        Toast.success('Printers refreshed');
+    } catch (error) {
+        Toast.error('Failed to refresh printers');
+    } finally {
+        button.innerHTML = originalContent;
+        button.disabled = false;
+    }
+}
+
+async function refreshJobs() {
+    await loadPrintJobs();
+    Toast.info('Jobs refreshed');
+}
+
+function quickPrint(printerName) {
+    showPrintDialog();
+    const printerSelect = document.getElementById('print-printer');
+    if (printerSelect) {
+        printerSelect.value = printerName;
+    }
+}
+
+async function viewJobDetails(jobId) {
+    try {
+        const job = await API.get(`/print/jobs/${jobId}`);
+
+        // Create and show job details modal
+        showJobDetailsModal(job);
+
+    } catch (error) {
+        Toast.error('Failed to load job details');
+    }
+}
+
+function showJobDetailsModal(job) {
+    // Remove existing modal if present
+    const existingModal = document.getElementById('job-details-modal');
+    if (existingModal) existingModal.remove();
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.id = 'job-details-modal';
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Job Details</h3>
+                <button class="close-btn" onclick="document.getElementById('job-details-modal').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="job-details">
+                <div class="detail-row">
+                    <strong>Job ID:</strong>
+                    <code>${job.id}</code>
+                </div>
+                <div class="detail-row">
+                    <strong>Filename:</strong>
+                    <span>${job.filename}</span>
+                </div>
+                <div class="detail-row">
+                    <strong>Printer:</strong>
+                    <span>${job.printer}</span>
+                </div>
+                <div class="detail-row">
+                    <strong>Status:</strong>
+                    <span class="status-badge status-${job.status.toLowerCase()}">
+                        <i class="fas ${getStatusIcon(job.status)}"></i>
+                        ${job.status}
+                    </span>
+                </div>
+                <div class="detail-row">
+                    <strong>Created:</strong>
+                    <span>${new Date(job.created_at).toLocaleString()}</span>
+                </div>
+                ${job.completed_at ? `
+                <div class="detail-row">
+                    <strong>Completed:</strong>
+                    <span>${new Date(job.completed_at).toLocaleString()}</span>
+                </div>
+                ` : ''}
+                ${job.cups_job_id ? `
+                <div class="detail-row">
+                    <strong>CUPS Job ID:</strong>
+                    <span>${job.cups_job_id}</span>
+                </div>
+                ` : ''}
+                ${job.error_message ? `
+                <div class="detail-row">
+                    <strong>Error:</strong>
+                    <span class="error-message">${job.error_message}</span>
+                </div>
+                ` : ''}
+                <div class="detail-row">
+                    <strong>Options:</strong>
+                    <ul class="job-options">
+                        <li>Copies: ${job.copies || 1}</li>
+                        <li>Pages: ${job.pages || 'All'}</li>
+                        <li>Duplex: ${job.duplex ? 'Yes' : 'No'}</li>
+                        <li>Color: ${job.color ? 'Yes' : 'No'}</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="document.getElementById('job-details-modal').remove()">Close</button>
+                ${['queued', 'processing', 'printing'].includes(job.status.toLowerCase()) ? `
+                <button class="btn btn-danger" onclick="cancelJob('${job.id}'); document.getElementById('job-details-modal').remove();">
+                    <i class="fas fa-times"></i> Cancel Job
+                </button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+}
+
+async function cancelJob(jobId) {
+    if (!confirm('Are you sure you want to cancel this print job?')) return;
+
+    try {
+        await API.delete(`/print/jobs/${jobId}`);
+        Toast.success('Print job cancelled');
+        await loadPrintJobs();
+    } catch (error) {
+        Toast.error(`Failed to cancel job: ${error.message}`);
+    }
+}
+
+async function deleteJob(jobId) {
+    if (!confirm('Are you sure you want to delete this print job record?')) return;
+
+    try {
+        await API.delete(`/print/jobs/${jobId}`);
+        Toast.success('Print job deleted');
+        await loadPrintJobs();
+    } catch (error) {
+        Toast.error(`Failed to delete job: ${error.message}`);
+    }
+}
+
+async function clearCompletedJobs() {
+    const completedJobs = PrintPage.jobs.filter(job =>
+        ['completed', 'failed', 'cancelled'].includes(job.status.toLowerCase())
+    );
+
+    if (completedJobs.length === 0) {
+        Toast.info('No completed jobs to clear');
+        return;
+    }
+
+    if (!confirm(`Clear ${completedJobs.length} completed job(s)?`)) return;
+
+    let cleared = 0;
+    for (const job of completedJobs) {
+        try {
+            await API.delete(`/print/jobs/${job.id}`);
+            cleared++;
+        } catch (error) {
+            console.error(`Failed to delete job ${job.id}:`, error);
+        }
+    }
+
+    Toast.success(`Cleared ${cleared} completed job(s)`);
+    await loadPrintJobs();
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    if (PrintPage.jobsRefreshInterval) {
+        clearInterval(PrintPage.jobsRefreshInterval);
     }
 });

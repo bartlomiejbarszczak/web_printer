@@ -1,7 +1,7 @@
 use actix_files::Files;
 use actix_web::{web, App, HttpServer, middleware::Logger};
 use std::io;
-
+use tokio::time::Instant;
 
 mod handlers;
 mod services;
@@ -73,9 +73,10 @@ async fn main() -> io::Result<()> {
             // Static files
             .service(Files::new("/static", "./static").show_files_listing())
 
-            // Configure JSON payload size (for file uploads)
+            // JSON payload size (for file uploads)
             .app_data(web::PayloadConfig::new(50 * 1024 * 1024)) // 50MB max
             .app_data(web::Data::new(pool.clone()))
+            .app_data(web::Data::new(models::AppState { start_time: Instant::now() }))
     })
         .bind("0.0.0.0:8080")?
         .run()

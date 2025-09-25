@@ -44,7 +44,6 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             pages_range TEXT,
             duplex BOOLEAN DEFAULT false,
             color BOOLEAN DEFAULT true,
-            file_size INTEGER,
             original_filename TEXT,
             mime_type TEXT
         )

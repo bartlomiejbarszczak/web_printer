@@ -79,8 +79,8 @@ pub struct ScanRequest {
 impl TryFrom<&SqliteRow> for ScanJob {
     type Error = sqlx::Error;
 
-    fn try_from(record: &SqliteRow) -> Result<Self, Self::Error> {
-        let status = match record.try_get("status")? {
+    fn try_from(row: &SqliteRow) -> Result<Self, Self::Error> {
+        let status = match row.try_get("status")? {
             "queued" => ScanJobStatus::Queued,
             "scanning" => ScanJobStatus::Scanning,
             "processing" => ScanJobStatus::Processing,
@@ -90,7 +90,7 @@ impl TryFrom<&SqliteRow> for ScanJob {
             _ => return Err(sqlx::error::Error::InvalidArgument("Unrecognized status".to_string()))
         };
 
-        let format = match record.try_get("format")? {
+        let format = match row.try_get("format")? {
             "pdf" => ScanFormat::Pdf,
             "jpeg" | "jpg" => ScanFormat::Jpeg,
             "png" => ScanFormat::Png,
@@ -98,14 +98,14 @@ impl TryFrom<&SqliteRow> for ScanJob {
             _ => return Err(sqlx::error::Error::InvalidArgument("Unrecognized format".to_string()))
         };
 
-        let color_mode = match record.try_get("color_mode")? {
+        let color_mode = match row.try_get("color_mode")? {
             "color" => ColorMode::Color,
             "grayscale" => ColorMode::Grayscale,
             "monochrome" => ColorMode::Monochrome,
             _ =>  return Err(sqlx::Error::InvalidArgument("Unrecognized color mode".to_string()))
         };
 
-        let page_size = match record.try_get("page_size")? {
+        let page_size = match row.try_get("page_size")? {
             "a4" => PageSize::A4,
             "a3" => PageSize::A3,
             "letter" => PageSize::Letter,
@@ -114,25 +114,25 @@ impl TryFrom<&SqliteRow> for ScanJob {
             _ => return Err(sqlx::Error::InvalidArgument("Unrecognized page size".to_string()))
         };
 
-        let uuid = Uuid::parse_str(record.try_get("job_uuid")?)
+        let uuid = Uuid::parse_str(row.try_get("job_uuid")?)
             .map_err(|e| {sqlx::Error::InvalidArgument(e.to_string())})?;
 
         Ok(ScanJob {
             id: uuid,
-            scanner: record.try_get("scanner_name")?,
+            scanner: row.try_get("scanner_name")?,
             status,
-            resolution: record.try_get("resolution")?,
+            resolution: row.try_get("resolution")?,
             format,
             color_mode,
             page_size,
-            brightness: record.try_get("brightness")?,
-            contrast: record.try_get("contrast")?,
-            output_filename: record.try_get("filename")?,
-            created_at: record.try_get("created_at")?,
-            started_at: record.try_get("started_at")?,
-            completed_at: record.try_get("completed_at")?,
-            error_message: record.try_get("error_message")?,
-            file_size: record.try_get("file_size")?,
+            brightness: row.try_get("brightness")?,
+            contrast: row.try_get("contrast")?,
+            output_filename: row.try_get("filename")?,
+            created_at: row.try_get("created_at")?,
+            started_at: row.try_get("started_at")?,
+            completed_at: row.try_get("completed_at")?,
+            error_message: row.try_get("error_message")?,
+            file_size: row.try_get("file_size")?,
         })
     }
 }
@@ -263,7 +263,7 @@ impl ScanJob {
         Ok(query.rows_affected())
     }
 
-    pub async fn update_in_db(&self, pool: &SqlitePool) -> Result<u64, sqlx::Error> {
+    pub async fn update_statues_in_db(&self, pool: &SqlitePool) -> Result<u64, sqlx::Error> {
         let status_str = match self.status {
             ScanJobStatus::Queued => "queued",
             ScanJobStatus::Scanning => "scanning",
@@ -289,7 +289,7 @@ impl ScanJob {
         Ok(query.rows_affected())
     }
 
-    pub async fn remove_from_db_by_uuid(id: Uuid, pool: &SqlitePool) -> Result<u64, sqlx::Error> {
+    pub async fn remove_by_uuid(id: Uuid, pool: &SqlitePool) -> Result<u64, sqlx::Error> {
         let query = query_bind!(
             r#"
             DELETE FROM scan_jobs WHERE job_uuid = ?;
@@ -337,6 +337,7 @@ impl ScanJob {
     pub async fn get_all(pool: &SqlitePool) -> Result<Vec<ScanJob>, sqlx::Error> {
         let rows = sqlx::query(r#"
             SELECT * FROM scan_jobs
+            ORDER BY created_at DESC
         "#
         ).fetch_all(pool).await?;
 

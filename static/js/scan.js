@@ -1,705 +1,679 @@
-// Scan management JavaScript
-// Handles all scan-related functionality
+// scan.js - Scan page specific functionality
 
-class ScanManager {
-    constructor() {
-        this.scanners = [];
-        this.scanJobs = [];
-        this.scanSettings = {
-            resolution: 300,
-            format: 'pdf',
-            color_mode: 'color',
-            page_size: 'a4',
-            brightness: 0,
-            contrast: 0
-        };
-        this.init();
+// Page state
+const ScanPage = {
+    jobs: [],
+    scanners: [],
+    scanFiles: [],
+    jobsRefreshInterval: null,
+    isSubmitting: false
+};
+
+// Initialize scan page
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.location.pathname === '/scan') {
+        initializeScanPage();
     }
-
-    async init() {
-        await this.loadScanners();
-        await this.loadScanJobs();
-        this.setupEventListeners();
-        this.initializeSettings();
-        this.updateUI();
-    }
-
-    // Load available scanners
-    async loadScanners() {
-        try {
-            this.scanners = await window.app.apiCall('/api/scanners');
-            this.updateScannerSelect();
-        } catch (error) {
-            console.error('Failed to load scanners:', error);
-            window.app.showNotification('Failed to load scanners', 'error');
-        }
-    }
-
-    // Load current scan jobs
-    async loadScanJobs() {
-        try {
-            this.scanJobs = await window.app.apiCall('/scan/jobs');
-            this.updateJobList();
-        } catch (error) {
-            console.error('Failed to load scan jobs:', error);
-        }
-    }
-
-    // Update scanner selection dropdown
-    updateScannerSelect() {
-        const select = document.getElementById('scanner-select');
-        if (!select) return;
-
-        select.innerHTML = '<option value="">Select Scanner</option>';
-
-        this.scanners.forEach(scanner => {
-            const option = document.createElement('option');
-            option.value = scanner.name;
-            option.textContent = `${scanner.vendor} ${scanner.model}`;
-            select.appendChild(option);
-        });
-
-        // Select first scanner by default
-        if (this.scanners.length > 0 && !select.value) {
-            select.value = this.scanners[0].name;
-        }
-    }
-
-    // Setup event listeners
-    setupEventListeners() {
-        // Scan form submission
-        const scanForm = document.getElementById('scan-form');
-        if (scanForm) {
-            scanForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.startScan();
-            });
-        }
-
-        // Preview scan button
-        const previewBtn = document.getElementById('preview-scan');
-        if (previewBtn) {
-            previewBtn.addEventListener('click', () => {
-                this.startPreviewScan();
-            });
-        }
-
-        // Settings change handlers
-        const settingsInputs = document.querySelectorAll('.scan-setting');
-        settingsInputs.forEach(input => {
-            input.addEventListener('change', (e) => {
-                this.updateSetting(e.target.name, e.target.value);
-            });
-        });
-
-        // Range input display updates
-        const rangeInputs = document.querySelectorAll('input[type="range"]');
-        rangeInputs.forEach(input => {
-            input.addEventListener('input', (e) => {
-                const display = document.getElementById(`${e.target.id}-value`);
-                if (display) {
-                    display.textContent = e.target.value;
-                }
-            });
-        });
-
-        // Preset buttons
-        const presetButtons = document.querySelectorAll('.preset-btn');
-        presetButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const preset = e.target.dataset.preset;
-                this.applyPreset(preset);
-            });
-        });
-
-        // Advanced settings toggle
-        const advancedToggle = document.getElementById('advanced-toggle');
-        const advancedSettings = document.getElementById('advanced-settings');
-        if (advancedToggle && advancedSettings) {
-            advancedToggle.addEventListener('click', () => {
-                advancedSettings.classList.toggle('hidden');
-                advancedToggle.textContent = advancedSettings.classList.contains('hidden')
-                    ? 'Show Advanced Settings'
-                    : 'Hide Advanced Settings';
-            });
-        }
-    }
-
-    // Initialize settings from form
-    initializeSettings() {
-        const form = document.getElementById('scan-form');
-        if (!form) return;
-
-        const formData = new FormData(form);
-        for (let [key, value] of formData.entries()) {
-            if (this.scanSettings.hasOwnProperty(key)) {
-                this.scanSettings[key] = value;
-            }
-        }
-    }
-
-    // Update a specific setting
-    updateSetting(name, value) {
-        if (this.scanSettings.hasOwnProperty(name)) {
-            // Convert numeric values
-            if (name === 'resolution' || name === 'brightness' || name === 'contrast') {
-                value = parseInt(value);
-            }
-            this.scanSettings[name] = value;
-        }
-    }
-
-    // Apply scan presets
-    applyPreset(preset) {
-        const presets = {
-            document: {
-                resolution: 300,
-                format: 'pdf',
-                color_mode: 'grayscale',
-                page_size: 'a4',
-                brightness: 0,
-                contrast: 10
-            },
-            photo: {
-                resolution: 600,
-                format: 'jpg',
-                color_mode: 'color',
-                page_size: 'a4',
-                brightness: 0,
-                contrast: 0
-            },
-            text: {
-                resolution: 400,
-                format: 'pdf',
-                color_mode: 'lineart',
-                page_size: 'a4',
-                brightness: 0,
-                contrast: 20
-            },
-            draft: {
-                resolution: 150,
-                format: 'pdf',
-                color_mode: 'grayscale',
-                page_size: 'a4',
-                brightness: 0,
-                contrast: 0
-            }
-        };
-
-        if (presets[preset]) {
-            this.scanSettings = { ...presets[preset] };
-            this.updateFormFromSettings();
-            window.app.showNotification(`Applied ${preset} preset`, 'info');
-        }
-    }
-
-    // Update form inputs from settings
-    updateFormFromSettings() {
-        Object.keys(this.scanSettings).forEach(key => {
-            const input = document.querySelector(`[name="${key}"]`);
-            if (input) {
-                input.value = this.scanSettings[key];
-
-                // Update range display
-                if (input.type === 'range') {
-                    const display = document.getElementById(`${input.id}-value`);
-                    if (display) {
-                        display.textContent = this.scanSettings[key];
-                    }
-                }
-            }
-        });
-    }
-
-    // Start a scan job
-    async startScan() {
-        const scanner = document.getElementById('scanner-select').value;
-        if (!scanner) {
-            window.app.showNotification('Please select a scanner', 'warning');
-            return;
-        }
-
-        // Update settings from form
-        this.collectSettingsFromForm();
-
-        const scanData = {
-            scanner: scanner,
-            ...this.scanSettings
-        };
-
-        try {
-            window.app.showProgressBar('scan-progress', 0);
-
-            const result = await window.app.apiCall('/scan', {
-                method: 'POST',
-                body: JSON.stringify(scanData)
-            });
-
-            window.app.showNotification(`Scan started! Job ID: ${result.job_id}`, 'success');
-
-            // Start polling for this job
-            this.pollScanJob(result.job_id);
-
-            // Refresh job list
-            await this.loadScanJobs();
-
-        } catch (error) {
-            console.error('Scan failed:', error);
-            window.app.showNotification('Failed to start scan', 'error');
-        } finally {
-            window.app.hideProgressBar('scan-progress');
-        }
-    }
-
-    // Start a preview scan (lower resolution, quick)
-    async startPreviewScan() {
-        const scanner = document.getElementById('scanner-select').value;
-        if (!scanner) {
-            window.app.showNotification('Please select a scanner', 'warning');
-            return;
-        }
-
-        // Create preview settings (lower resolution for speed)
-        const previewSettings = {
-            ...this.scanSettings,
-            resolution: 150,
-            format: 'jpg'
-        };
-
-        const scanData = {
-            scanner: scanner,
-            ...previewSettings
-        };
-
-        try {
-            window.app.showProgressBar('preview-progress', 0);
-
-            const result = await window.app.apiCall('/scan', {
-                method: 'POST',
-                body: JSON.stringify(scanData)
-            });
-
-            window.app.showNotification('Preview scan started', 'info');
-
-            // Poll for preview completion
-            this.pollScanJob(result.job_id, true);
-
-        } catch (error) {
-            console.error('Preview scan failed:', error);
-            window.app.showNotification('Failed to start preview scan', 'error');
-        } finally {
-            window.app.hideProgressBar('preview-progress');
-        }
-    }
-
-    // Collect settings from form inputs
-    collectSettingsFromForm() {
-        const form = document.getElementById('scan-form');
-        if (!form) return;
-
-        const formData = new FormData(form);
-        for (let [key, value] of formData.entries()) {
-            if (this.scanSettings.hasOwnProperty(key)) {
-                // Convert numeric values
-                if (key === 'resolution' || key === 'brightness' || key === 'contrast') {
-                    value = parseInt(value);
-                }
-                this.scanSettings[key] = value;
-            }
-        }
-    }
-
-    // Poll scan job status
-    async pollScanJob(jobId, isPreview = false) {
-        const pollInterval = setInterval(async () => {
-            try {
-                const job = await window.app.apiCall(`/scan/jobs/${jobId}`);
-
-                if (job.status === 'completed') {
-                    clearInterval(pollInterval);
-
-                    if (isPreview) {
-                        this.showPreview(job);
-                        window.app.showNotification('Preview scan completed', 'success');
-                    } else {
-                        window.app.showNotification('Scan completed successfully', 'success');
-                    }
-
-                    await this.loadScanJobs();
-
-                } else if (job.status === 'failed') {
-                    clearInterval(pollInterval);
-                    window.app.showNotification('Scan failed: ' + (job.error || 'Unknown error'), 'error');
-                    await this.loadScanJobs();
-                }
-
-                // Update progress if available
-                if (job.progress !== undefined) {
-                    const progressId = isPreview ? 'preview-progress' : 'scan-progress';
-                    window.app.updateProgressBar(
-                        document.querySelector(`#${progressId} .progress-bar`),
-                        job.progress
-                    );
-                }
-
-            } catch (error) {
-                console.error('Error polling scan job:', error);
-                clearInterval(pollInterval);
-            }
-        }, 1000);
-
-        // Stop polling after 5 minutes
-        setTimeout(() => {
-            clearInterval(pollInterval);
-        }, 300000);
-    }
-
-    // Show preview image
-    showPreview(job) {
-        const previewContainer = document.getElementById('scan-preview');
-        if (!previewContainer) return;
-
-        previewContainer.innerHTML = `
-            <div class="preview-header">
-                <h3>Scan Preview</h3>
-                <button class="btn btn-secondary btn-sm" onclick="scanManager.closePreview()">Close</button>
-            </div>
-            <div class="preview-image">
-                <img src="/api/scan/download/${job.id}" alt="Scan Preview" />
-            </div>
-            <div class="preview-actions">
-                <button class="btn btn-primary" onclick="scanManager.acceptPreview()">Accept & Scan</button>
-                <button class="btn btn-secondary" onclick="scanManager.adjustSettings()">Adjust Settings</button>
-            </div>
-        `;
-
-        previewContainer.classList.remove('hidden');
-    }
-
-    // Close preview
-    closePreview() {
-        const previewContainer = document.getElementById('scan-preview');
-        if (previewContainer) {
-            previewContainer.classList.add('hidden');
-            previewContainer.innerHTML = '';
-        }
-    }
-
-    // Accept preview and start full scan
-    acceptPreview() {
-        this.closePreview();
-        this.startScan();
-    }
-
-    // Adjust settings (close preview and show settings)
-    adjustSettings() {
-        this.closePreview();
-        const advancedSettings = document.getElementById('advanced-settings');
-        if (advancedSettings && advancedSettings.classList.contains('hidden')) {
-            document.getElementById('advanced-toggle').click();
-        }
-    }
-
-    // Update scan jobs list
-    async updateJobList() {
-        try {
-            this.scanJobs = await window.app.apiCall('/scan/jobs');
-            this.renderJobList();
-        } catch (error) {
-            console.error('Failed to update job list:', error);
-        }
-    }
-
-    // Render jobs list in UI
-    renderJobList() {
-        const jobsList = document.getElementById('scan-jobs-list');
-        if (!jobsList) return;
-
-        if (this.scanJobs.length === 0) {
-            jobsList.innerHTML = '<div class="no-jobs">No scan jobs</div>';
-            return;
-        }
-
-        jobsList.innerHTML = this.scanJobs.map(job => `
-            <div class="job-item ${job.status}" data-job-id="${job.id}">
-                <div class="job-header">
-                    <div class="job-title">Scan Job #${job.id}</div>
-                    <div class="job-status status-${job.status}">${job.status}</div>
-                </div>
-                <div class="job-details">
-                    <div class="job-info">
-                        <span>Scanner: ${job.scanner}</span>
-                        <span>Resolution: ${job.resolution}dpi</span>
-                        <span>Format: ${job.format.toUpperCase()}</span>
-                        <span>Mode: ${job.color_mode}</span>
-                    </div>
-                    <div class="job-time">${window.app.formatDateTime(job.created_at)}</div>
-                </div>
-                ${job.progress !== undefined && job.status === 'processing' ?
-            `<div class="job-progress">
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${job.progress}%"></div>
-                            <div class="progress-text">${Math.round(job.progress)}%</div>
-                        </div>
-                    </div>` : ''
-        }
-                <div class="job-actions">
-                    ${job.status === 'completed' ?
-            `<button class="btn btn-primary btn-sm" onclick="scanManager.downloadScan('${job.id}')">Download</button>
-                         <button class="btn btn-secondary btn-sm" onclick="scanManager.viewScan('${job.id}')">View</button>` :
-            ''
-        }
-                    ${job.status === 'processing' ?
-            `<button class="btn btn-danger btn-sm" onclick="scanManager.cancelJob('${job.id}')">Cancel</button>` :
-            ''
-        }
-                    ${job.status === 'completed' || job.status === 'failed' ?
-            `<button class="btn btn-secondary btn-sm" onclick="scanManager.removeJobFromList('${job.id}')">Remove</button>` :
-            ''
-        }
-                </div>
-            </div>
-        `).join('');
-    }
-
-    // Download scanned document
-    downloadScan(jobId) {
-        const downloadUrl = `/api/scan/download/${jobId}`;
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = `scan_${jobId}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        window.app.showNotification('Download started', 'info');
-    }
-
-    // View scanned document (open in new tab)
-    viewScan(jobId) {
-        const viewUrl = `/api/scan/download/${jobId}`;
-        window.open(viewUrl, '_blank');
-    }
-
-    // Cancel scan job
-    async cancelJob(jobId) {
-        if (!confirm('Are you sure you want to cancel this scan job?')) {
-            return;
-        }
-
-        try {
-            await window.app.apiCall(`/scan/jobs/${jobId}`, { method: 'DELETE' });
-            window.app.showNotification('Scan job cancelled', 'success');
-            await this.loadScanJobs();
-        } catch (error) {
-            console.error('Failed to cancel job:', error);
-            window.app.showNotification('Failed to cancel scan job', 'error');
-        }
-    }
-
-    // Remove job from display
-    removeJobFromList(jobId) {
-        const jobElement = document.querySelector(`[data-job-id="${jobId}"]`);
-        if (jobElement) {
-            jobElement.remove();
-        }
-
-        // Also remove from local array
-        this.scanJobs = this.scanJobs.filter(job => job.id !== jobId);
-    }
-
-    // Get scanner status summary
-    getScannerStatusSummary() {
-        return {
-            available: this.scanners.length,
-            total: this.scanners.length
-        };
-    }
-
-    // Update UI elements
-    updateUI() {
-        const statusSummary = this.getScannerStatusSummary();
-        const statusElement = document.getElementById('scanner-status-summary');
-
-        if (statusElement) {
-            statusElement.innerHTML = `
-                <div class="status-summary">
-                    <div class="status-item">
-                        <span class="count">${statusSummary.available}</span>
-                        <span class="label">Available</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="count">${this.scanJobs.filter(j => j.status === 'processing').length}</span>
-                        <span class="label">Active</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="count">${this.scanJobs.filter(j => j.status === 'completed').length}</span>
-                        <span class="label">Completed</span>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Update current settings display
-        const settingsDisplay = document.getElementById('current-settings');
-        if (settingsDisplay) {
-            settingsDisplay.innerHTML = `
-                <div class="settings-summary">
-                    <div class="setting-item">
-                        <span class="label">Resolution:</span>
-                        <span class="value">${this.scanSettings.resolution}dpi</span>
-                    </div>
-                    <div class="setting-item">
-                        <span class="label">Format:</span>
-                        <span class="value">${this.scanSettings.format.toUpperCase()}</span>
-                    </div>
-                    <div class="setting-item">
-                        <span class="label">Color:</span>
-                        <span class="value">${this.scanSettings.color_mode}</span>
-                    </div>
-                    <div class="setting-item">
-                        <span class="label">Size:</span>
-                        <span class="value">${this.scanSettings.page_size.toUpperCase()}</span>
-                    </div>
-                </div>
-            `;
-        }
-    }
-
-    // Multi-page scanning support
-    async startMultiPageScan() {
-        const scanner = document.getElementById('scanner-select').value;
-        if (!scanner) {
-            window.app.showNotification('Please select a scanner', 'warning');
-            return;
-        }
-
-        this.multiPageScan = {
-            pages: [],
-            currentPage: 1,
-            scanner: scanner,
-            settings: { ...this.scanSettings }
-        };
-
-        window.app.showModal('multi-page-modal');
-        this.scanNextPage();
-    }
-
-    // Scan next page in multi-page sequence
-    async scanNextPage() {
-        const modal = document.getElementById('multi-page-modal');
-        const status = modal.querySelector('.multi-page-status');
-
-        if (status) {
-            status.textContent = `Scanning page ${this.multiPageScan.currentPage}...`;
-        }
-
-        try {
-            const scanData = {
-                scanner: this.multiPageScan.scanner,
-                ...this.multiPageScan.settings,
-                format: 'jpg' // Individual pages as JPG
-            };
-
-            const result = await window.app.apiCall('/scan', {
-                method: 'POST',
-                body: JSON.stringify(scanData)
-            });
-
-            // Wait for completion
-            const job = await this.waitForScanCompletion(result.job_id);
-            this.multiPageScan.pages.push(job);
-            this.multiPageScan.currentPage++;
-
-            // Update UI
-            this.updateMultiPageUI();
-
-        } catch (error) {
-            console.error('Multi-page scan failed:', error);
-            window.app.showNotification('Failed to scan page', 'error');
-        }
-    }
-
-    // Wait for scan completion
-    async waitForScanCompletion(jobId) {
-        return new Promise((resolve, reject) => {
-            const pollInterval = setInterval(async () => {
-                try {
-                    const job = await window.app.apiCall(`/scan/jobs/${jobId}`);
-
-                    if (job.status === 'completed') {
-                        clearInterval(pollInterval);
-                        resolve(job);
-                    } else if (job.status === 'failed') {
-                        clearInterval(pollInterval);
-                        reject(new Error('Scan failed'));
-                    }
-                } catch (error) {
-                    clearInterval(pollInterval);
-                    reject(error);
-                }
-            }, 1000);
-        });
-    }
-
-    // Update multi-page scan UI
-    updateMultiPageUI() {
-        const modal = document.getElementById('multi-page-modal');
-        const pagesList = modal.querySelector('.pages-list');
-        const status = modal.querySelector('.multi-page-status');
-
-        if (pagesList) {
-            pagesList.innerHTML = this.multiPageScan.pages.map((page, index) => `
-                <div class="page-item">
-                    <img src="/api/scan/download/${page.id}" alt="Page ${index + 1}" />
-                    <span>Page ${index + 1}</span>
-                </div>
-            `).join('');
-        }
-
-        if (status) {
-            status.textContent = `${this.multiPageScan.pages.length} pages scanned. Insert next page or finish.`;
-        }
-    }
-
-    // Finish multi-page scan and create PDF
-    async finishMultiPageScan() {
-        try {
-            const pageIds = this.multiPageScan.pages.map(p => p.id);
-
-            // Call API to combine pages into PDF
-            const result = await window.app.apiCall('/scan/combine', {
-                method: 'POST',
-                body: JSON.stringify({
-                    pages: pageIds,
-                    format: 'pdf',
-                    title: `Multi-page scan ${new Date().toISOString()}`
-                })
-            });
-
-            window.app.showNotification('Multi-page scan completed!', 'success');
-            window.app.hideModal('multi-page-modal');
-
-            await this.loadScanJobs();
-
-        } catch (error) {
-            console.error('Failed to combine pages:', error);
-            window.app.showNotification('Failed to create multi-page document', 'error');
-        }
-    }
-
-    // Refresh all data
-    async refresh() {
-        await this.loadScanners();
-        await this.loadScanJobs();
-        this.updateUI();
-        window.app.showNotification('Scan manager refreshed', 'info');
+});
+
+async function initializeScanPage() {
+    await loadScanners();
+    await loadScanJobs();
+    await loadScanFiles();
+    setupScanForm();
+    setupRangeInputs();
+
+    // Start auto-refresh for jobs
+    ScanPage.jobsRefreshInterval = setInterval(loadScanJobs, 5000); // Every 5 seconds
+}
+
+// Load and display scanners
+async function loadScanners() {
+    try {
+        ScanPage.scanners = await API.get('/scanners');
+        displayScanners();
+        populateScannerDropdown();
+    } catch (error) {
+        console.error('Failed to load scanners:', error);
+        showScannersError();
     }
 }
 
-// Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.location.pathname === '/scan') {
-        window.scanManager = new ScanManager();
+function displayScanners() {
+    const grid = document.getElementById('scanners-grid');
+    if (!grid) return;
+
+    if (ScanPage.scanners.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-scanner"></i>
+                <h3>No Scanners Available</h3>
+                <p>Check SANE service and scanner connections</p>
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = ScanPage.scanners.map(scanner => `
+        <div class="scanner-card available">
+            <div class="scanner-icon">
+                <i class="fas fa-scanner"></i>
+            </div>
+            <div class="scanner-info">
+                <h4>${scanner.name}</h4>
+                <p class="scanner-model">${scanner.model || 'Unknown Model'}</p>
+                <p class="scanner-vendor">${scanner.vendor || 'Unknown Vendor'}</p>
+                <p class="scanner-type">${scanner.device_type || 'Flatbed Scanner'}</p>
+            </div>
+            <div class="scanner-actions">
+                <button class="btn btn-sm btn-primary" onclick="quickScan('${scanner.name}')">
+                    <i class="fas fa-scanner"></i>
+                    Scan
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function showScannersError() {
+    const grid = document.getElementById('scanners-grid');
+    if (grid) {
+        grid.innerHTML = `
+            <div class="error-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Failed to Load Scanners</h3>
+                <p>Check SANE service status</p>
+                <button class="btn btn-secondary" onclick="refreshScanners()">
+                    <i class="fas fa-refresh"></i>
+                    Try Again
+                </button>
+            </div>
+        `;
+    }
+}
+
+function populateScannerDropdown() {
+    const select = document.getElementById('scan-scanner');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Select Scanner</option>';
+
+    ScanPage.scanners.forEach(scanner => {
+        const option = document.createElement('option');
+        option.value = scanner.name;
+        option.textContent = scanner.name;
+        select.appendChild(option);
+    });
+}
+
+// Load and display scan jobs
+async function loadScanJobs() {
+    try {
+        const jobs = await API.get('/scan/jobs');
+        ScanPage.jobs = jobs;
+        displayScanJobs();
+    } catch (error) {
+        console.error('Failed to load scan jobs:', error);
+        showJobsError();
+    }
+}
+
+function displayScanJobs() {
+    const tbody = document.getElementById('scan-jobs-tbody');
+    if (!tbody) return;
+
+    if (ScanPage.jobs.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="empty-state">
+                    <i class="fas fa-scanner"></i>
+                    <h3>No Scan Jobs</h3>
+                    <p>Start scanning to see jobs here</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = ScanPage.jobs.map(job => `
+        <tr class="job-row job-${job.status.toLowerCase()}">
+            <td>
+                <code class="job-id" title="${job.id}">${Utils.formatJobId(job.id)}</code>
+            </td>
+            <td>
+                <span class="scanner-name">${job.scanner}</span>
+            </td>
+            <td>
+                <span class="format-badge format-${job.format}">${job.format.toUpperCase()}</span>
+            </td>
+            <td>
+                <span class="resolution">${job.resolution} DPI</span>
+            </td>
+            <td>
+                <span class="status-badge status-${job.status.toLowerCase()}">
+                    <i class="fas ${getScanStatusIcon(job.status)}"></i>
+                    ${job.status}
+                </span>
+            </td>
+            <td>
+                <span class="job-time" title="${new Date(job.created_at).toLocaleString()}">
+                    ${timeAgo(job.created_at)}
+                </span>
+            </td>
+            <td>
+                <span class="file-size">
+                    ${job.file_size ? Utils.formatFileSize(job.file_size) : '-'}
+                </span>
+            </td>
+            <td>
+                <div class="job-actions">
+                    ${getScanJobActions(job)}
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function showJobsError() {
+    const tbody = document.getElementById('scan-jobs-tbody');
+    if (tbody) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="error-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Failed to load scan jobs
+                    <button class="btn btn-sm btn-secondary" onclick="refreshScanJobs()">Retry</button>
+                </td>
+            </tr>
+        `;
+    }
+}
+
+function getScanStatusIcon(status) {
+    const icons = {
+        'queued': 'fa-clock',
+        'scanning': 'fa-spinner fa-spin',
+        'processing': 'fa-cog fa-spin',
+        'completed': 'fa-check-circle',
+        'failed': 'fa-exclamation-circle',
+        'cancelled': 'fa-times-circle'
+    };
+    return icons[status.toLowerCase()] || 'fa-question-circle';
+}
+
+function getScanJobActions(job) {
+    const status = job.status.toLowerCase();
+    let actions = [];
+
+    // View details button
+    actions.push(`
+        <button class="btn btn-sm btn-secondary" onclick="viewScanJobDetails('${job.id}')" title="View Details">
+            <i class="fas fa-info-circle"></i>
+        </button>
+    `);
+
+    // Download button (for completed jobs)
+    if (status === 'completed') {
+        actions.push(`
+            <button class="btn btn-sm btn-success" onclick="downloadScan('${job.id}')" title="Download">
+                <i class="fas fa-download"></i>
+            </button>
+        `);
+
+        // Preview button (for image formats)
+        if (['jpeg', 'png', 'tiff'].includes(job.format)) {
+            actions.push(`
+                <button class="btn btn-sm btn-info" onclick="previewScan('${job.id}')" title="Preview">
+                    <i class="fas fa-eye"></i>
+                </button>
+            `);
+        }
+    }
+
+    // Delete button (for completed/failed jobs)
+    if (['completed', 'failed', 'cancelled'].includes(status)) {
+        actions.push(`
+            <button class="btn btn-sm btn-danger" onclick="deleteScanJob('${job.id}')" title="Delete Job">
+                <i class="fas fa-trash"></i>
+            </button>
+        `);
+    }
+
+    return actions.join('');
+}
+
+// Load and display scan files
+async function loadScanFiles() {
+    try {
+        const files = await API.get('/files/scans');
+        ScanPage.scanFiles = files;
+        displayScanFiles();
+    } catch (error) {
+        console.error('Failed to load scan files:', error);
+        showFilesError();
+    }
+}
+
+function displayScanFiles() {
+    const grid = document.getElementById('scan-files-grid');
+    if (!grid) return;
+
+    if (ScanPage.scanFiles.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-folder-open"></i>
+                <h3>No Scan Files</h3>
+                <p>Completed scans will appear here</p>
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = ScanPage.scanFiles.map(file => `
+        <div class="file-card">
+            <div class="file-icon">
+                <i class="fas ${getFileIcon(file.name)}"></i>
+            </div>
+            <div class="file-info">
+                <h4 class="file-name" title="${file.name}">${truncateFilename(file.name)}</h4>
+                <p class="file-size">${Utils.formatFileSize(file.size)}</p>
+                <p class="file-date">${Utils.formatDate(file.modified)}</p>
+            </div>
+            <div class="file-actions">
+                <button class="btn btn-sm btn-success" onclick="downloadFile('${file.name}')" title="Download">
+                    <i class="fas fa-download"></i>
+                </button>
+                ${isImageFile(file.name) ? `
+                <button class="btn btn-sm btn-info" onclick="previewFile('${file.name}')" title="Preview">
+                    <i class="fas fa-eye"></i>
+                </button>
+                ` : ''}
+                <button class="btn btn-sm btn-danger" onclick="deleteScanFile('${file.name}')" title="Delete">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function showFilesError() {
+    const grid = document.getElementById('scan-files-grid');
+    if (grid) {
+        grid.innerHTML = `
+            <div class="error-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Failed to Load Files</h3>
+                <button class="btn btn-secondary" onclick="refreshScanFiles()">
+                    <i class="fas fa-refresh"></i>
+                    Try Again
+                </button>
+            </div>
+        `;
+    }
+}
+
+function getFileIcon(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const icons = {
+        'pdf': 'fa-file-pdf',
+        'jpg': 'fa-file-image',
+        'jpeg': 'fa-file-image',
+        'png': 'fa-file-image',
+        'tiff': 'fa-file-image',
+        'tif': 'fa-file-image'
+    };
+    return icons[ext] || 'fa-file';
+}
+
+function truncateFilename(filename, maxLength = 20) {
+    if (filename.length <= maxLength) return filename;
+
+    const ext = filename.split('.').pop();
+    const name = filename.substring(0, filename.lastIndexOf('.'));
+    const truncated = name.substring(0, maxLength - ext.length - 4) + '...';
+    return truncated + '.' + ext;
+}
+
+function isImageFile(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    return ['jpg', 'jpeg', 'png', 'tiff', 'tif'].includes(ext);
+}
+
+// Setup scan form
+function setupScanForm() {
+    const form = document.getElementById('scan-form');
+    if (!form) return;
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        if (ScanPage.isSubmitting) return;
+        ScanPage.isSubmitting = true;
+
+        const submitBtn = document.getElementById('scan-submit-btn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting Scan...';
+        submitBtn.disabled = true;
+
+        try {
+            const formData = new FormData(form);
+            const scanData = Object.fromEntries(formData);
+
+            // Convert numeric fields
+            scanData.resolution = parseInt(scanData.resolution);
+            if (scanData.brightness) scanData.brightness = parseInt(scanData.brightness);
+            if (scanData.contrast) scanData.contrast = parseInt(scanData.contrast);
+
+            const result = await API.post('/scan', scanData);
+
+            Toast.success(`Scan job started: ${result.job_id.substring(0, 8)}...`);
+            closeScanDialog();
+            form.reset();
+            resetRangeInputs();
+
+            // Refresh jobs immediately
+            await loadScanJobs();
+
+        } catch (error) {
+            Toast.error(`Scan failed: ${error.message}`);
+        } finally {
+            ScanPage.isSubmitting = false;
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+}
+
+// Setup range input listeners
+function setupRangeInputs() {
+    const brightnessRange = document.getElementById('scan-brightness');
+    const contrastRange = document.getElementById('scan-contrast');
+    const brightnessValue = document.getElementById('brightness-value');
+    const contrastValue = document.getElementById('contrast-value');
+
+    if (brightnessRange && brightnessValue) {
+        brightnessRange.addEventListener('input', (e) => {
+            brightnessValue.textContent = e.target.value;
+        });
+    }
+
+    if (contrastRange && contrastValue) {
+        contrastRange.addEventListener('input', (e) => {
+            contrastValue.textContent = e.target.value;
+        });
+    }
+}
+
+function resetRangeInputs() {
+    const brightnessRange = document.getElementById('scan-brightness');
+    const contrastRange = document.getElementById('scan-contrast');
+    const brightnessValue = document.getElementById('brightness-value');
+    const contrastValue = document.getElementById('contrast-value');
+
+    if (brightnessRange) {
+        brightnessRange.value = 0;
+        if (brightnessValue) brightnessValue.textContent = '0';
+    }
+
+    if (contrastRange) {
+        contrastRange.value = 0;
+        if (contrastValue) contrastValue.textContent = '0';
+    }
+}
+
+function timeAgo(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+}
+
+// Action functions
+async function refreshScanners() {
+    const button = event.target;
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    button.disabled = true;
+
+    try {
+        await loadScanners();
+        Toast.success('Scanners refreshed');
+    } catch (error) {
+        Toast.error('Failed to refresh scanners');
+    } finally {
+        button.innerHTML = originalContent;
+        button.disabled = false;
+    }
+}
+
+async function refreshScanJobs() {
+    await loadScanJobs();
+    Toast.info('Scan jobs refreshed');
+}
+
+async function refreshScanFiles() {
+    await loadScanFiles();
+    Toast.info('Scan files refreshed');
+}
+
+function quickScan(scannerName) {
+    showScanDialog();
+    const scannerSelect = document.getElementById('scan-scanner');
+    if (scannerSelect) {
+        scannerSelect.value = scannerName;
+    }
+}
+
+async function viewScanJobDetails(jobId) {
+    try {
+        const job = await API.get(`/scan/jobs/${jobId}`);
+        showScanJobDetailsModal(job);
+    } catch (error) {
+        Toast.error('Failed to load job details');
+    }
+}
+
+function showScanJobDetailsModal(job) {
+    // Remove existing modal if present
+    const existingModal = document.getElementById('scan-job-details-modal');
+    if (existingModal) existingModal.remove();
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.id = 'scan-job-details-modal';
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Scan Job Details</h3>
+                <button class="close-btn" onclick="document.getElementById('scan-job-details-modal').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="job-details">
+                <div class="detail-row">
+                    <strong>Job ID:</strong>
+                    <code>${job.id}</code>
+                </div>
+                <div class="detail-row">
+                    <strong>Scanner:</strong>
+                    <span>${job.scanner}</span>
+                </div>
+                <div class="detail-row">
+                    <strong>Status:</strong>
+                    <span class="status-badge status-${job.status.toLowerCase()}">
+                        <i class="fas ${getScanStatusIcon(job.status)}"></i>
+                        ${job.status}
+                    </span>
+                </div>
+                <div class="detail-row">
+                    <strong>Created:</strong>
+                    <span>${new Date(job.created_at).toLocaleString()}</span>
+                </div>
+                ${job.completed_at ? `
+                <div class="detail-row">
+                    <strong>Completed:</strong>
+                    <span>${new Date(job.completed_at).toLocaleString()}</span>
+                </div>
+                ` : ''}
+                ${job.file_size ? `
+                <div class="detail-row">
+                    <strong>File Size:</strong>
+                    <span>${Utils.formatFileSize(job.file_size)}</span>
+                </div>
+                ` : ''}
+                ${job.error_message ? `
+                <div class="detail-row">
+                    <strong>Error:</strong>
+                    <span class="error-message">${job.error_message}</span>
+                </div>
+                ` : ''}
+                <div class="detail-row">
+                    <strong>Settings:</strong>
+                    <ul class="job-options">
+                        <li>Format: ${job.format.toUpperCase()}</li>
+                        <li>Resolution: ${job.resolution} DPI</li>
+                        <li>Color Mode: ${job.color_mode}</li>
+                        <li>Page Size: ${job.page_size}</li>
+                        ${job.brightness !== undefined ? `<li>Brightness: ${job.brightness}</li>` : ''}
+                        ${job.contrast !== undefined ? `<li>Contrast: ${job.contrast}</li>` : ''}
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="document.getElementById('scan-job-details-modal').remove()">Close</button>
+                ${job.status.toLowerCase() === 'completed' ? `
+                <button class="btn btn-success" onclick="downloadScan('${job.id}'); document.getElementById('scan-job-details-modal').remove();">
+                    <i class="fas fa-download"></i> Download
+                </button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+}
+
+async function downloadScan(jobId) {
+    try {
+        window.open(`/api/scan/download/${jobId}`, '_blank');
+        Toast.success('Download started');
+    } catch (error) {
+        Toast.error('Download failed');
+    }
+}
+
+async function downloadFile(filename) {
+    try {
+        window.open(`/static/scans/${filename}`, '_blank');
+        Toast.success('Download started');
+    } catch (error) {
+        Toast.error('Download failed');
+    }
+}
+
+async function previewScan(jobId) {
+    try {
+        const job = await API.get(`/scan/jobs/${jobId}`);
+        if (job && job.status.toLowerCase() === 'completed') {
+            showPreviewModal(`/api/scan/download/${jobId}`, job.filename || 'scan');
+        }
+    } catch (error) {
+        Toast.error('Preview failed');
+    }
+}
+
+async function previewFile(filename) {
+    showPreviewModal(`/static/scans/${filename}`, filename);
+}
+
+function showPreviewModal(url, filename) {
+    const modal = document.getElementById('preview-modal');
+    if (!modal) return;
+
+    const container = document.getElementById('preview-container');
+    const downloadBtn = document.getElementById('download-preview-btn');
+
+    if (isImageFile(filename)) {
+        container.innerHTML = `
+            <div class="image-preview">
+                <img src="${url}" alt="${filename}" style="max-width: 100%; max-height: 70vh; object-fit: contain;">
+            </div>
+        `;
+    } else {
+        container.innerHTML = `
+            <div class="file-preview">
+                <i class="fas fa-file-pdf fa-4x"></i>
+                <h3>${filename}</h3>
+                <p>Preview not available for this file type</p>
+            </div>
+        `;
+    }
+
+    downloadBtn.onclick = () => {
+        window.open(url, '_blank');
+    };
+
+    Modal.show('preview-modal');
+}
+
+function closePreviewModal() {
+    Modal.hide('preview-modal');
+}
+
+async function deleteScanJob(jobId) {
+    if (!confirm('Are you sure you want to delete this scan job record?')) return;
+
+    try {
+        // Note: This endpoint doesn't exist in your backend yet, you may need to add it
+        // For now, we'll just refresh the jobs list
+        Toast.info('Job deletion not implemented yet');
+        await loadScanJobs();
+    } catch (error) {
+        Toast.error(`Failed to delete job: ${error.message}`);
+    }
+}
+
+async function deleteScanFile(filename) {
+    if (!confirm(`Are you sure you want to delete "${filename}"?`)) return;
+
+    try {
+        await API.delete(`/files/scans/${encodeURIComponent(filename)}`);
+        Toast.success('File deleted successfully');
+        await loadScanFiles();
+    } catch (error) {
+        Toast.error(`Failed to delete file: ${error.message}`);
+    }
+}
+
+async function clearCompletedScans() {
+    const completedJobs = ScanPage.jobs.filter(job =>
+        ['completed', 'failed', 'cancelled'].includes(job.status.toLowerCase())
+    );
+
+    if (completedJobs.length === 0) {
+        Toast.info('No completed scans to clear');
+        return;
+    }
+
+    if (!confirm(`Clear ${completedJobs.length} completed scan job(s)?`)) return;
+
+    Toast.info('Clear completed scans not fully implemented yet');
+    // Implementation would be similar to print jobs
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    if (ScanPage.jobsRefreshInterval) {
+        clearInterval(ScanPage.jobsRefreshInterval);
     }
 });

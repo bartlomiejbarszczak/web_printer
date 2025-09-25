@@ -124,7 +124,7 @@ async fn execute_scan_job(job_id: Uuid, pool: &SqlitePool) -> Result<(), sqlx::E
 
     // Update status to scanning
     job.set_status(ScanJobStatus::Scanning);
-    job.update_in_db(pool).await.map_err(|e| e.to_string()).unwrap();
+    job.update_statues_in_db(pool).await.map_err(|e| e.to_string()).unwrap();
 
     // Execute the scan
     match sane_service.start_scan(&job).await {
@@ -133,13 +133,13 @@ async fn execute_scan_job(job_id: Uuid, pool: &SqlitePool) -> Result<(), sqlx::E
                 job.file_size = Some(metadata.len());
             }
             job.set_status(ScanJobStatus::Completed);
-            job.update_in_db(pool).await?;
+            job.update_statues_in_db(pool).await?;
 
             log::info!("Scan job {} completed successfully", job_id);
         },
         Err(e) => {
             job.set_error(e.clone());
-            job.update_in_db(pool).await?;
+            job.update_statues_in_db(pool).await?;
 
             log::error!("Scan job {} failed: {}", job_id, e);
         }
