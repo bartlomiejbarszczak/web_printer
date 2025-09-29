@@ -1,7 +1,6 @@
 pub mod print_job;
 pub mod scan_job;
 
-use chrono::{DateTime, TimeZone};
 pub use print_job::*;
 pub use scan_job::*;
 

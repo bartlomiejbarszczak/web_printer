@@ -1,7 +1,5 @@
-use std::any::Any;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use log::Record;
 use sqlx::{Row, SqlitePool};
 use sqlx::sqlite::SqliteRow;
 use uuid::Uuid;
@@ -296,7 +294,7 @@ impl ScanJob {
             "#,
             id.to_string()
         ).execute(pool).await?;
-
+    
         Ok(query.rows_affected())
     }
 
@@ -340,11 +338,10 @@ impl ScanJob {
             ORDER BY created_at DESC
         "#
         ).fetch_all(pool).await?;
-
+    
         let scan_jobs = rows.iter().map(ScanJob::try_from).collect::<Result<Vec<ScanJob>, sqlx::Error>>();
-
+    
         Ok(scan_jobs?)
-
     }
 
     pub async fn get_by_status(status: ScanJobStatus, pool: &SqlitePool) -> Result<Vec<ScanJob>, sqlx::Error> {
@@ -356,16 +353,16 @@ impl ScanJob {
             ScanJobStatus::Failed => { "failed" }
             ScanJobStatus::Cancelled => { "cancelled" }
         };
-
+    
         let rows = query_bind!(r#"
             SELECT * FROM scan_jobs
             WHERE status = ?
             ORDER BY created_at ASC;
         "#,
         status_str).fetch_all(pool).await?;
-
+    
         let scan_jobs = rows.iter().map(ScanJob::try_from).collect::<Result<Vec<ScanJob>, sqlx::Error>>();
-
+    
         Ok(scan_jobs?)
     }
 }

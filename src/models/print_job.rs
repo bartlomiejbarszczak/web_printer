@@ -205,7 +205,7 @@ impl PrintJob {
             "#,
             uuid.to_string()
         ).execute(pool).await?;
-
+    
         Ok(query.rows_affected())
     }
 
@@ -234,10 +234,10 @@ impl PrintJob {
             "#,
             status.to_string()
         ).fetch_all(pool).await?;
-
+    
         let print_jobs = rows.iter()
             .map(|x| {PrintJob::try_from(x)}).collect::<Result<Vec<PrintJob>, sqlx::Error>>();
-
+    
         Ok(print_jobs?)
     }
 
@@ -250,10 +250,10 @@ impl PrintJob {
             "#,
             limit
         ).fetch_all(pool).await?;
-
+    
         let print_jobs = rows.iter()
             .map(|x| {PrintJob::try_from(x)}).collect::<Result<Vec<PrintJob>, sqlx::Error>>();
-
+    
         Ok(print_jobs?)
     }
     

@@ -403,8 +403,10 @@ function populateScannerSelect(selectId) {
 
     AppState.scanners.forEach(scanner => {
         const option = document.createElement('option');
-        option.value = scanner.name;
-        option.textContent = scanner.name;
+        option.value = scanner.name; // Keep the actual device name for API
+        // Display human-readable vendor and model
+        const displayName = `${scanner.vendor} ${scanner.model}`;
+        option.textContent = displayName;
         select.appendChild(option);
     });
 }
@@ -529,7 +531,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Start periodic updates
-    AppState.refreshInterval = setInterval(updateSystemStatus, 30000); // Every 30 seconds
+    // AppState.refreshInterval = setInterval(updateSystemStatus, 30000); // Every 30 seconds
+    AppState.refreshInterval = setInterval(updateSystemStatus, 5000); // Every 5 seconds
 });
 
 // Cleanup on page unload

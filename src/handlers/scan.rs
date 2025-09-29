@@ -1,7 +1,5 @@
 use actix_web::{web, HttpRequest, HttpResponse, Result};
-use std::sync::{Arc, Mutex};
 use actix_web::error::ErrorBadRequest;
-use actix_web::http::StatusCode;
 use sqlx::{SqlitePool};
 use uuid::Uuid;
 

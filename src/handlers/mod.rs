@@ -3,7 +3,6 @@ pub mod scan;
 pub mod system;
 
 use actix_web::{HttpResponse, Result};
-use serde_json::json;
 use crate::models::ApiResponse;
 
 /// Helper function to create JSON success responses
