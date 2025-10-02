@@ -21,9 +21,10 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             brightness INTEGER NOT NULL DEFAULT 0,
             contrast INTEGER NOT NULL DEFAULT 0,
             file_size INTEGER,
-            page_count INTEGER
+            page_count INTEGER,
+            file_available BOOLEAN NOT NULL DEFAULT false
         )
-        "#
+        ;"#
     ).execute(pool).await?;
 
     sqlx::query(
@@ -47,7 +48,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             original_filename TEXT,
             mime_type TEXT
         )
-        "#
+        ;"#
     ).execute(pool).await?;
 
     // Pi Zero 2W optimizations

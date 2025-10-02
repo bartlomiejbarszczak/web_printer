@@ -23,6 +23,7 @@ pub struct ScanJob {
     pub completed_at: Option<DateTime<Utc>>,
     pub error_message: Option<String>,
     pub file_size: Option<u64>,
+    pub file_available: bool
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -131,6 +132,7 @@ impl TryFrom<&SqliteRow> for ScanJob {
             completed_at: row.try_get("completed_at")?,
             error_message: row.try_get("error_message")?,
             file_size: row.try_get("file_size")?,
+            file_available: row.try_get("file_available")?,
         })
     }
 }
@@ -168,6 +170,7 @@ impl ScanJob {
             completed_at: None,
             error_message: None,
             file_size: None,
+            file_available: false
         }
     }
 
@@ -235,9 +238,9 @@ impl ScanJob {
             r#"
             INSERT INTO scan_jobs (
                 job_uuid, scanner_name, filename, file_path, status,
-                created_at, started_at, completed_at, error_message,
-                resolution, format, color_mode, page_size, brightness, contrast, file_size
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_at, started_at, completed_at, error_message, resolution,
+                format, color_mode, page_size, brightness, contrast, file_size, file_available
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id;
             "#,
             self.id.to_string(),
@@ -255,7 +258,8 @@ impl ScanJob {
             page_size_str,
             self.brightness,
             self.contrast,
-            self.file_size.map(|s| s as i64)
+            self.file_size.map(|s| s as i64),
+            self.file_available
         ).execute(pool).await?;
 
         Ok(query.rows_affected())
@@ -274,13 +278,14 @@ impl ScanJob {
         let query = query_bind!(
             r#"
             UPDATE scan_jobs
-            SET status = ?, started_at = ?, completed_at = ?, error_message = ?, file_size = ? WHERE job_uuid = ?;
+            SET status = ?, started_at = ?, completed_at = ?, error_message = ?, file_size = ?, file_available = ? WHERE job_uuid = ?;
             "#,
             status_str,
             self.started_at,
             self.completed_at,
             self.error_message.clone(),
             self.file_size.map(|s| s as i64),
+            self.file_available,
             self.id.to_string()
         ).execute(pool).await?;
 
@@ -364,6 +369,19 @@ impl ScanJob {
         let scan_jobs = rows.iter().map(ScanJob::try_from).collect::<Result<Vec<ScanJob>, sqlx::Error>>();
     
         Ok(scan_jobs?)
+    }
+    
+    pub async fn update_file_available_by_filename(filename: String, status: bool, pool: &SqlitePool) -> Result<u64, sqlx::Error> {
+        let query = query_bind!(
+            r#"
+            UPDATE scan_jobs
+            SET file_available = ? WHERE filename = ?;
+            "#,
+            status,
+            filename
+        ).execute(pool).await?;
+        
+        Ok(query.rows_affected())
     }
 }
 

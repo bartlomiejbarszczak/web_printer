@@ -78,6 +78,17 @@ pub async fn get_scan_job(path: web::Path<Uuid>, pool: web::Data<SqlitePool>) ->
     }
 }
 
+
+/// DELETE /api/scan/jobs/{job_id} - Delete specific scan job form database
+pub async fn delete_scan_job_record(path: web::Path<Uuid>, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
+    let job_id = path.into_inner();
+
+    match ScanJob::remove_by_uuid(job_id, pool.as_ref()).await {
+        Ok(_) => json_success(format!("Successfully removed job {}", job_id)),
+        Err(e) => internal_error(format!("Failed to find job: {}", e)),
+    }
+}
+
 /// GET /api/scan/download/{job_id} - Download scanned file
 pub async fn download_scan(path: web::Path<Uuid>, req: HttpRequest, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
     let job_id = path.into_inner();
@@ -129,6 +140,7 @@ async fn execute_scan_job(job_id: Uuid, pool: &SqlitePool) -> Result<(), sqlx::E
         Ok(output_path) => {
             if let Ok(metadata) = std::fs::metadata(&output_path) {
                 job.file_size = Some(metadata.len());
+                job.file_available = true;
             }
             job.set_status(ScanJobStatus::Completed);
             job.update_statues_in_db(pool).await?;

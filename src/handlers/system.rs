@@ -5,7 +5,7 @@ use actix_web::error::ErrorInternalServerError;
 // use std::path::PathBuf;
 use sqlx::SqlitePool;
 use crate::handlers::{json_success, internal_error, json_error};
-use crate::models::{AppState, SystemStatus};
+use crate::models::{AppState, ScanJob, SystemStatus};
 use crate::services::cups::CupsService;
 use crate::services::sane::SaneService;
 use crate::services::escputil::MaintenanceService;
@@ -155,9 +155,6 @@ pub async fn delete_upload(path: web::Path<String>) -> Result<HttpResponse> {
             }
         }
     }
-
-    // TODO
-    //  remove record from database -> why?
 }
 
 /// GET /api/files/scans - List scan files
@@ -195,10 +192,16 @@ pub async fn list_scans() -> Result<HttpResponse> {
 /// DELETE /api/files/scans/{filename} - Delete scan file
 pub async fn delete_scan(path: web::Path<String>, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
     let filename = path.into_inner();
-    let _pool = pool.as_ref();
+    let pool = pool.as_ref();
     
     match std::fs::remove_file(format!("scans/{}", filename)) {
-        Ok(_) => json_success(format!("File {} deleted successfully", filename)),
+        Ok(_) => {
+            ScanJob::update_file_available_by_filename(filename.clone(), false, pool).await
+                .map_err(|e| ErrorInternalServerError(format!("Failed to delete scan: {}", e)))?;
+            // Possible file loading error. File could be deleted but database still store mislead information
+
+            json_success(format!("File {} deleted successfully", filename))
+        },
         Err(e) => {
             match e.kind() {
                 std::io::ErrorKind::NotFound => {

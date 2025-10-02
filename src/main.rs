@@ -49,7 +49,9 @@ async fn main() -> io::Result<()> {
                     .route("/scan", web::post().to(scan::start_scan))
                     .route("/scan/jobs", web::get().to(scan::list_scan_jobs))
                     .route("/scan/jobs/{job_id}", web::get().to(scan::get_scan_job))
+                    .route("/scan/jobs/{job_id}", web::delete().to(scan::delete_scan_job_record))
                     .route("/scan/download/{job_id}", web::get().to(scan::download_scan))
+
 
 
                     // System endpoints
