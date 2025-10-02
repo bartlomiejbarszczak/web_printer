@@ -112,8 +112,7 @@ function populatePrinterDropdown() {
 // Load and display print jobs
 async function loadPrintJobs() {
     try {
-        const jobs = await API.get('/print/jobs');
-        PrintPage.jobs = jobs;
+        PrintPage.jobs = await API.get('/print/jobs');
         displayPrintJobs();
     } catch (error) {
         console.error('Failed to load print jobs:', error);
@@ -462,7 +461,7 @@ async function cancelJob(jobId) {
     if (!confirm('Are you sure you want to cancel this print job?')) return;
 
     try {
-        await API.delete(`/print/jobs/${jobId}`);
+        await API.post(`/print/jobs/${jobId}`);
         Toast.success('Print job cancelled');
         await loadPrintJobs();
     } catch (error) {

@@ -187,6 +187,7 @@ impl CupsService {
         if active_output.status.success() {
             let stdout = String::from_utf8_lossy(&active_output.stdout);
             for line in stdout.lines() {
+                log::info!("{}", line);
                 if let Some(job_part) = line.split_whitespace().next() {
                     if let Some(parsed_job_id) = job_part.split('-').last() {
                         if parsed_job_id == job_id.to_string() {

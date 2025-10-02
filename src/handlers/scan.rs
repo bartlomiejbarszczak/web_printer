@@ -1,5 +1,8 @@
+use std::fmt::format;
+use std::io::Error;
 use actix_web::{web, HttpRequest, HttpResponse, Result};
-use actix_web::error::ErrorBadRequest;
+use actix_web::dev::ResourcePath;
+use actix_web::error::{ErrorBadRequest, ErrorInternalServerError};
 use sqlx::{SqlitePool};
 use uuid::Uuid;
 
@@ -89,6 +92,29 @@ pub async fn delete_scan_job_record(path: web::Path<Uuid>, pool: web::Data<Sqlit
     }
 }
 
+/// DELETE /api/scan/remove/{job_id} - Delete specific scan file
+pub async fn delete_scan_file(path: web::Path<Uuid>, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
+    let job_id = path.into_inner();
+
+    if let Some(scan_job) = ScanJob::find_by_uuid(job_id, pool.as_ref())
+        .await
+        .map_err(|e| ErrorInternalServerError(e.to_string()))? {
+
+        let filename = match scan_job.output_filename {
+            Some(filename) => filename,
+            None => return Err(ErrorInternalServerError("Validation error".to_string())),
+        };
+
+        delete_scan(filename.clone(), &pool)
+            .await
+            .map_err(|e| ErrorInternalServerError(e.to_string()))?;
+
+        return json_success(format!("Successfully removed scan {}", filename));
+    };
+
+    internal_error(format!("Could not find scan job {job_id}"))
+}
+
 /// GET /api/scan/download/{job_id} - Download scanned file
 pub async fn download_scan(path: web::Path<Uuid>, req: HttpRequest, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
     let job_id = path.into_inner();
@@ -102,7 +128,7 @@ pub async fn download_scan(path: web::Path<Uuid>, req: HttpRequest, pool: web::D
         Some(job) => {
             if let ScanJobStatus::Completed = job.status {
                 if let Some(file_path) = job.get_file_path() {
-                    match actix_files::NamedFile::open(&file_path) {
+                    match actix_files::NamedFile::open_async(&file_path).await {
                         Ok(file) => Ok(file.into_response(&req)),
                         Err(_) => json_error("Scan file not found".to_string()),
                     }
@@ -154,5 +180,25 @@ async fn execute_scan_job(job_id: Uuid, pool: &SqlitePool) -> Result<(), sqlx::E
             log::error!("Scan job {} failed: {}", job_id, e);
         }
     }
+    Ok(())
+}
+
+
+async fn delete_scan(filename: String, pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
+    match std::fs::remove_file(format!("scans/{}", filename)) {
+        Ok(_) => {
+            ScanJob::update_file_available_by_filename(filename.clone(), false, pool).await
+                .map_err(|e| format!("Failed to delete scan: {}", e))?;
+        },
+        Err(e) => {
+            match e.kind() {
+                std::io::ErrorKind::NotFound => {
+                    log::warn!("File {} does not exist", filename);
+                },
+                _ => return Err(Box::new(e)),
+            }
+        }
+    }
+
     Ok(())
 }

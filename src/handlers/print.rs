@@ -36,8 +36,7 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
     let mut file_data: Option<Vec<u8>> = None;
     let mut filename: Option<String> = None;
     let mut form_data: HashMap<String, String> = HashMap::new();
-
-    // Process multipart form data
+    
     while let Some(mut field) = payload.try_next().await.map_err(|e| {
         log::error!("Error reading multipart field: {}", e);
     }).unwrap_or(None) {
@@ -47,7 +46,6 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
 
         if let Some(field_name) = field_name {
             if field_name == "file" {
-                // Handle file upload
                 if let Some(file_name) = file_name {
                     filename = Some(file_name);
                 }
@@ -89,8 +87,7 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
             return json_error("No filename provided".to_string());
         }
     };
-
-    // Parse form data into PrintRequest
+    
     let print_request = PrintRequest {
         printer: form_data.get("printer").cloned(),
         copies: form_data.get("copies")
@@ -103,8 +100,7 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
             .map(|s| s == "true" || s == "on")
             .unwrap_or(true)),
     };
-
-    // Get available printers first
+    
     let available_printers = match cups_service.get_printers().await {
         Ok(printers) => printers,
         Err(e) => {
@@ -120,12 +116,10 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
     // Determine printer to use with validation
     let printer_name = if let Some(requested_printer) = print_request.printer.clone() {
         if requested_printer.is_empty() {
-            // Get default printer
             available_printers.iter()
                 .find(|p| p.is_default)
                 .map(|p| p.name.clone())
                 .or_else(|| {
-                    // If no default, use first available
                     available_printers.first().map(|p| p.name.clone())
                 })
                 .unwrap_or_else(|| {
@@ -133,7 +127,6 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
                     "default".to_string()
                 })
         } else {
-            // Validate that the requested printer exists
             if available_printers.iter().any(|p| p.name == requested_printer) {
                 requested_printer
             } else {
@@ -150,7 +143,6 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
             }
         }
     } else {
-        // No printer specified, use default or first available
         available_printers.iter()
             .find(|p| p.is_default)
             .map(|p| p.name.clone())
@@ -176,8 +168,7 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
         Ok(cups_job_id) => {
             print_job.cups_job_id = Some(cups_job_id);
             print_job.set_status(PrintJobStatus::Processing);
-
-            // Store job
+            
             let job_id = print_job.id;
 
             print_job.save_to_db(&pool).await.map_err(|e| {
@@ -206,10 +197,8 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
                 log::error!("Failed to update print job statuses: {}", e);
                 ErrorInternalServerError(e.to_string())
             })?;
-
-            // Clean up file
+            
             let _ = std::fs::remove_file(&file_path);
-
             json_error(format!("Failed to submit print job: {}", e))
         }
     }
@@ -238,7 +227,7 @@ pub async fn get_print_job(path: web::Path<Uuid>, pool: web::Data<SqlitePool>) -
     }
 }
 
-/// DELETE /api/print/jobs/{job_id} - Cancel print job
+/// POST /api/print/jobs/{job_id} - Cancel print job
 pub async fn cancel_print_job(path: web::Path<Uuid>, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
     let job_id = path.into_inner();
     let pool = pool.as_ref();
@@ -246,7 +235,6 @@ pub async fn cancel_print_job(path: web::Path<Uuid>, pool: web::Data<SqlitePool>
     let cups_service = CupsService::new();
 
     if let Some(mut job) = PrintJob::find_by_uuid(job_id, pool).await.map_err(|e| {ErrorInternalServerError(e.to_string())})? {
-        // Try to cancel in CUPS if we have a job ID
         if let Some(cups_job_id) = job.cups_job_id {
             match cups_service.cancel_job(&job.printer, cups_job_id).await {
                 Ok(_) => {
@@ -256,20 +244,34 @@ pub async fn cancel_print_job(path: web::Path<Uuid>, pool: web::Data<SqlitePool>
                 },
                 Err(e) => {
                     log::warn!("Failed to cancel CUPS job {}: {}", cups_job_id, e);
-                    // Marked as cancelled in system
                     job.set_status(PrintJobStatus::Cancelled);
                     job.update_statuses_in_db(pool).await.map_err(|e| {ErrorInternalServerError(e.to_string())})?;
                     json_success(serde_json::json!({"message": "Print job marked as cancelled"}))
                 }
             }
         } else {
-            // Job hasn't been submitted to CUPS yet, marked as cancelled
             job.set_status(PrintJobStatus::Cancelled);
             job.update_statuses_in_db(pool).await.map_err(|e| {ErrorInternalServerError(e.to_string())})?;
             json_success(serde_json::json!({"message": "Print job cancelled"}))
         }
     } else {
         json_error("Print job not found".to_string())
+    }
+}
+
+/// DELETE /api/print/jobs/{job_id} - Delete specific print job form database
+pub async fn delete_print_job_record(path: web::Path<Uuid>, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
+    let job_id = path.into_inner();
+
+    match PrintJob::remove_by_uuid(job_id, pool.as_ref()).await {
+        Ok(_) => { 
+            log::info!("Removed Print Job record for {}", job_id);
+            json_success(format!("Successfully removed job {}", job_id))
+        },
+        Err(e) => { 
+            log::error!("Failed to remove Print Job record for {}: {}", job_id, e);
+            internal_error(format!("Failed to find job: {}", e)) 
+        },
     }
 }
 
