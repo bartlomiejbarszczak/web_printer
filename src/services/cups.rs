@@ -132,18 +132,22 @@ impl CupsService {
 
         // Page range if specified
         if let Some(ref pages) = job.pages {
-            cmd.args(["-P", pages]);
+            if pages.len() > 0 {
+                cmd.args(["-P", pages]);
+            }
         }
 
         // Duplex option
         if job.duplex {
-            cmd.args(["-o", "sides=two-sided-long-edge"]);
+            cmd.args(["-o", "sides=two -sided-long-edge"]);
         }
 
-        // Color option
-        if !job.color {
-            cmd.args(["-o", "ColorModel=Gray"]);
-        }
+        // Set color
+        let color_mode = match job.color {
+            true => "COLOR".to_string(),
+            false => "MONO".to_string()
+        };
+        cmd.args(["-o", format!("Ink={color_mode}").as_str()]);
 
         // Add the file to print
         cmd.arg(file_path);

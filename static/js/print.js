@@ -286,7 +286,6 @@ function setupPrintForm() {
             closePrintDialog();
             form.reset();
 
-            // Refresh jobs immediately
             await loadPrintJobs();
 
         } catch (error) {

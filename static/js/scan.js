@@ -25,7 +25,7 @@ async function initializeScanPage() {
 
     // Start auto-refresh for jobs
     ScanPage.jobsRefreshInterval = setInterval(loadScanJobs, 5000); // Every 5 seconds
-    ScanPage.jobsRefreshInterval = setInterval(loadScanFiles, 5000); // Every 5 seconds
+    // setInterval(loadScanFiles, 5000); // Every 5 seconds
 }
 
 // Load and display scanners
@@ -110,6 +110,21 @@ function populateScannerDropdown() {
     });
 }
 
+// Helper function to get scanner display name from device name
+function getScannerDisplayName(deviceName) {
+    const scanner = ScanPage.scanners.find(s => s.name === deviceName);
+
+    if (scanner) {
+        return `${scanner.vendor} ${scanner.model}`;
+    }
+
+    if (deviceName.includes(':')) {
+        const parts = deviceName.split(':');
+        return parts[0].toUpperCase();
+    }
+    return deviceName;
+}
+
 // Load and display scan jobs
 async function loadScanJobs() {
     try {
@@ -142,10 +157,10 @@ function displayScanJobs() {
     tbody.innerHTML = ScanPage.jobs.map(job => `
         <tr class="job-row job-${job.status.toLowerCase()}">
             <td>
-                <code class="job-id" title="${job.id}">${Utils.formatJobId(job.id)}</code>
+                <span class="filename" title="${job.output_filename || 'Unnamed'}">${truncateFilename(job.output_filename || 'Unnamed', 25)}</span>
             </td>
             <td>
-                <span class="scanner-name">${job.scanner}</span>
+                <span class="scanner-name">${getScannerDisplayName(job.scanner)}</span>
             </td>
             <td>
                 <span class="format-badge format-${job.format}">${job.format.toUpperCase()}</span>
@@ -247,6 +262,7 @@ function getScanJobActions(job) {
 }
 
 // Load and display scan files
+//FIXME remove
 async function loadScanFiles() {
     try {
         const files = await API.get('/files/scans');
@@ -258,6 +274,7 @@ async function loadScanFiles() {
     }
 }
 
+//FIXME remove
 function displayScanFiles() {
     const grid = document.getElementById('scan-files-grid');
     if (!grid) return;
@@ -300,6 +317,7 @@ function displayScanFiles() {
     `).join('');
 }
 
+//FIXME remove
 function showFilesError() {
     const grid = document.getElementById('scan-files-grid');
     if (grid) {
@@ -316,6 +334,8 @@ function showFilesError() {
     }
 }
 
+
+//FIXME remove
 function getFileIcon(filename) {
     const ext = filename.split('.').pop().toLowerCase();
     const icons = {
@@ -330,7 +350,7 @@ function getFileIcon(filename) {
 }
 
 function truncateFilename(filename, maxLength = 20) {
-    if (filename.length <= maxLength) return filename;
+    if (!filename || filename.length <= maxLength) return filename;
 
     const ext = filename.split('.').pop();
     const name = filename.substring(0, filename.lastIndexOf('.'));
@@ -375,7 +395,6 @@ function setupScanForm() {
             form.reset();
             resetRangeInputs();
 
-            // Refresh jobs immediately
             await loadScanJobs();
 
         } catch (error) {
@@ -423,20 +442,6 @@ function resetRangeInputs() {
         contrastRange.value = 0;
         if (contrastValue) contrastValue.textContent = '0';
     }
-}
-
-function timeAgo(dateString) {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${diffDays}d ago`;
 }
 
 // Action functions
@@ -505,12 +510,12 @@ function showScanJobDetailsModal(job) {
             </div>
             <div class="job-details">
                 <div class="detail-row">
-                    <strong>Job ID:</strong>
-                    <code>${job.id}</code>
+                    <strong>Filename:</strong>
+                    <code>${job.output_filename || 'Unnamed'}</code>
                 </div>
                 <div class="detail-row">
                     <strong>Scanner:</strong>
-                    <span>${job.scanner}</span>
+                    <span>${getScannerDisplayName(job.scanner)}</span>
                 </div>
                 <div class="detail-row">
                     <strong>Status:</strong>
@@ -581,6 +586,7 @@ async function downloadScan(jobId) {
     }
 }
 
+//FIXME remove
 async function downloadFile(filename) {
     try {
         window.open(`/scans/${filename}`, '_blank');
@@ -594,7 +600,7 @@ async function previewScan(jobId) {
     try {
         const job = await API.get(`/scan/jobs/${jobId}`);
         if (job && job.status.toLowerCase() === 'completed' && job.file_available) {
-            showPreviewModal(`/api/scan/download/${jobId}`, job.filename || 'scan');
+            showPreviewModal(`/api/scan/download/${jobId}`, job.output_filename || 'scan');
         } else if (job && !job.file_available) {
             Toast.error('File is no longer available');
         } else {
@@ -605,8 +611,9 @@ async function previewScan(jobId) {
     }
 }
 
+//FIXME remove
 async function previewFile(filename) {
-    showPreviewModal(`scans/${filename}`, filename);
+    showPreviewModal(`/scans/${filename}`, filename);
 }
 
 function showPreviewModal(url, filename) {
@@ -647,10 +654,7 @@ async function deleteScanJob(jobId) {
     if (!confirm('Are you sure you want to delete this scan job record?')) return;
 
     try {
-        const scan_job = await API.get(`/scan/jobs/${encodeURIComponent(jobId)}`)
-
         await API.delete(`/scan/jobs/${encodeURIComponent(jobId)}`)
-        await API.delete(`/files/scans/${encodeURIComponent(scan_job.output_filename)}`)
 
         Toast.success('Scan job deleted successfully');
         await loadScanFiles();
@@ -661,6 +665,7 @@ async function deleteScanJob(jobId) {
     }
 }
 
+//FIXME remove
 async function deleteScanFile(filename) {
     if (!confirm(`Are you sure you want to delete "${filename}"?`)) return;
 

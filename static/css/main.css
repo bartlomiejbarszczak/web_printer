@@ -143,6 +143,20 @@ body {
     gap: 1.5rem;
 }
 
+/* Page Header - for print and scan pages */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.page-header h2 {
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
 /* Cards */
 .card {
     background: var(--bg-primary);
@@ -151,6 +165,7 @@ body {
     box-shadow: var(--shadow-sm);
     transition: var(--transition);
     overflow: hidden;
+    margin-bottom: 2rem;
 }
 
 .card:hover {
@@ -171,10 +186,17 @@ body {
     color: var(--primary-color);
 }
 
-.card-header h2 {
+.card-header h2,
+.card-header h3 {
     font-size: 1.125rem;
     font-weight: 600;
     color: var(--text-primary);
+    flex: 1;
+}
+
+.card-header .header-actions {
+    display: flex;
+    gap: 0.5rem;
 }
 
 .card-content {
@@ -251,6 +273,38 @@ body {
 .btn-secondary:hover {
     background-color: var(--border-color);
     color: var(--text-primary);
+}
+
+.btn-sm {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+}
+
+.btn-danger {
+    background-color: var(--error-color);
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #dc2626;
+}
+
+.btn-success {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #059669;
+}
+
+.btn-info {
+    background-color: #0ea5e9;
+    color: white;
+}
+
+.btn-info:hover {
+    background-color: #0284c7;
 }
 
 .btn:disabled {
@@ -349,6 +403,157 @@ body {
     font-size: 0.875rem;
 }
 
+/* Printers and Scanners Grid */
+.printers-grid,
+.scanners-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.printer-card,
+.scanner-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    transition: var(--transition);
+}
+
+.printer-card:hover,
+.scanner-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.printer-card.default {
+    border-color: var(--primary-color);
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.printer-icon,
+.scanner-icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.printer-info,
+.scanner-info {
+    flex: 1;
+}
+
+.printer-info h4,
+.scanner-info h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.printer-status,
+.scanner-type {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.printer-description,
+.scanner-device {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+.status-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    margin-right: 0.25rem;
+}
+
+.status-dot.status-idle {
+    background-color: var(--success-color);
+}
+
+.status-dot.status-printing {
+    background-color: var(--warning-color);
+}
+
+.status-dot.status-stopped {
+    background-color: var(--error-color);
+}
+
+.printer-actions,
+.scanner-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Files Grid */
+.files-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.file-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    transition: var(--transition);
+}
+
+.file-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.file-icon {
+    font-size: 3rem;
+    color: var(--primary-color);
+}
+
+.file-info {
+    text-align: center;
+    width: 100%;
+}
+
+.file-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+    word-break: break-word;
+}
+
+.file-size,
+.file-date {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.file-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
 /* Loading States */
 .loading {
     opacity: 0.6;
@@ -367,6 +572,29 @@ body {
     border-radius: 50%;
     animation: spin 1s linear infinite;
     transform: translate(-50%, -50%);
+}
+
+.loading-placeholder {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+}
+
+.loading-placeholder i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.error-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+}
+
+.error-state i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: var(--error-color);
 }
 
 @keyframes spin {
@@ -402,5 +630,20 @@ body {
 
     .btn {
         justify-content: center;
+    }
+
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .printers-grid,
+    .scanners-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .files-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     }
 }
