@@ -379,14 +379,15 @@ function displayRecentActivity(jobs) {
     container.innerHTML = jobs.map(job => {
         const isPrint = job.Print !== undefined;
         const jobData = isPrint ? job.Print : job.Scan;
-        const icon = isPrint ? 'print' : 'scan';
+        const icon = isPrint ? 'print' : 'scanner';
         const type = isPrint ? 'Print' : 'Scan';
         const name = truncateFilename(isPrint ? jobData.filename : (jobData.output_filename || 'Scan'), 20);
 
         return `
             <div class="activity-item">
                 <div class="activity-icon ${icon}">
-                    <i class="fas fa-${icon}"></i>
+<!--                    <i class="fas fa-${icon}"></i>-->
+                    <i class="fas fa-print"></i>
                 </div>
                 <div class="activity-content">
                     <div class="activity-title">${type}: ${name}</div>
