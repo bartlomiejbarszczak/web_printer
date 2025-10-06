@@ -291,6 +291,7 @@ async function updateSystemStatus() {
         // Update dashboard stats if on main page
         if (window.location.pathname === '/') {
             updateDashboardStats(status);
+            await updateRecentActivity();
         }
 
     } catch (error) {
@@ -342,11 +343,133 @@ async function loadInitialData() {
         // Update UI if on dashboard
         if (window.location.pathname === '/') {
             updateDashboardStats(AppState.systemStatus);
+            await updateRecentActivity();
         }
 
     } catch (error) {
         console.error('Failed to load initial data:', error);
         Toast.error('Failed to load initial data');
+    }
+}
+
+// Update recent activity
+async function updateRecentActivity() {
+    try {
+        const recentJobs = await API.get('/system/get-recent');
+        displayRecentActivity(recentJobs);
+    } catch (error) {
+        console.error('Failed to load recent activity:', error);
+    }
+}
+
+function displayRecentActivity(jobs) {
+    const container = document.getElementById('recent-activity');
+    if (!container) return;
+
+    if (!jobs || jobs.length === 0) {
+        container.innerHTML = `
+            <div class="activity-placeholder">
+                <i class="fas fa-clock"></i>
+                <p>No recent activity</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = jobs.map(job => {
+        const isPrint = job.Print !== undefined;
+        const jobData = isPrint ? job.Print : job.Scan;
+        const icon = isPrint ? 'print' : 'scan';
+        const type = isPrint ? 'Print' : 'Scan';
+        const name = truncateFilename(isPrint ? jobData.filename : (jobData.output_filename || 'Scan'), 20);
+
+        return `
+            <div class="activity-item">
+                <div class="activity-icon ${icon}">
+                    <i class="fas fa-${icon}"></i>
+                </div>
+                <div class="activity-content">
+                    <div class="activity-title">${type}: ${name}</div>
+                    <div class="activity-time">${formatActivityTime(jobData.completed_at || jobData.created_at)}</div>
+                </div>
+                <span class="status-badge status-${jobData.status.toLowerCase()}">
+                    ${jobData.status}
+                </span>
+            </div>
+        `;
+    }).join('');
+}
+
+function truncateFilename(filename, maxLength = 20) {
+    if (!filename || filename.length <= maxLength) return filename;
+
+    const ext = filename.split('.').pop();
+    const name = filename.substring(0, filename.lastIndexOf('.'));
+
+    return name.substring(0, maxLength - ext.length - 4) + '...'
+}
+
+function formatActivityTime(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    return date.toLocaleDateString();
+}
+
+// Printer maintenance functions
+async function performNozzleCheck() {
+    const btn = document.getElementById('nozzle-check-btn');
+    if (!btn) return;
+
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+    btn.disabled = true;
+
+    try {
+        const result = await API.post('/system/nozzle/check', {});
+
+        if (result === 'true' || result === true) {
+            Toast.success('Nozzle check completed successfully! Check your printer output.');
+        } else {
+            Toast.warning('Nozzle check command sent, but status unclear. Check your printer.');
+        }
+    } catch (error) {
+        Toast.error(`Nozzle check failed: ${error.message}`);
+    } finally {
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+    }
+}
+
+async function performNozzleClean() {
+    if (!confirm('This will clean the printer nozzles. Continue?')) return;
+
+    const btn = document.getElementById('nozzle-clean-btn');
+    if (!btn) return;
+
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cleaning...';
+    btn.disabled = true;
+
+    try {
+        const result = await API.post('/system/nozzle/clean', {});
+
+        if (result === 'true' || result === true) {
+            Toast.success('Nozzle cleaning completed successfully!');
+        } else {
+            Toast.warning('Nozzle cleaning command sent, but status unclear.');
+        }
+    } catch (error) {
+        Toast.error(`Nozzle cleaning failed: ${error.message}`);
+    } finally {
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
     }
 }
 
@@ -420,6 +543,12 @@ function setupDashboardForms() {
             e.preventDefault();
 
             const formData = new FormData(printForm);
+
+            // Remove pages field if it's empty to let the printer print all pages
+            const pagesValue = formData.get('pages');
+            if (!pagesValue || pagesValue.trim() === '') {
+                formData.delete('pages');
+            }
 
             try {
                 const result = await API.postForm('/print', formData);
@@ -531,7 +660,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Start periodic updates
-    // AppState.refreshInterval = setInterval(updateSystemStatus, 30000); // Every 30 seconds
     AppState.refreshInterval = setInterval(updateSystemStatus, 5000); // Every 5 seconds
 });
 

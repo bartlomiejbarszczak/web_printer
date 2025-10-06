@@ -66,7 +66,6 @@
             <!-- Scan Section -->
             <div class="card scan-card">
                 <div class="card-header">
-<!--                    <i class="fas fa-scanner"></i>-->
                     <i class="fas fa-print"></i>
                     <h2>Scanning</h2>
                 </div>
@@ -90,6 +89,32 @@
                             <i class="fas fa-list"></i>
                             Manage Scans
                         </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Printer Maintenance -->
+            <div class="card maintenance-card">
+                <div class="card-header">
+                    <i class="fas fa-tools"></i>
+                    <h2>Printer Maintenance</h2>
+                </div>
+                <div class="card-content">
+                    <div class="maintenance-info">
+                        <p class="maintenance-description">
+                            <i class="fas fa-info-circle"></i>
+                            Keep your printer in optimal condition
+                        </p>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-primary" onclick="performNozzleCheck()" id="nozzle-check-btn">
+                            <i class="fas fa-check-circle"></i>
+                            Nozzle Check
+                        </button>
+                        <button class="btn btn-secondary" onclick="performNozzleClean()" id="nozzle-clean-btn">
+                            <i class="fas fa-spray-can"></i>
+                            Clean Nozzles
+                        </button>
                     </div>
                 </div>
             </div>
@@ -253,6 +278,9 @@
         </form>
     </div>
 </div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
 
 <script src="/static/js/main.js"></script>
 </body>

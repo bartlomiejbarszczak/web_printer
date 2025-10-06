@@ -262,7 +262,7 @@ function truncateFilename(filename, maxLength = 20) {
 
     const ext = filename.split('.').pop();
     const name = filename.substring(0, filename.lastIndexOf('.'));
-    // return truncated + '.' + ext;
+
     return name.substring(0, maxLength - ext.length - 4) + '...'
 }
 
