@@ -19,13 +19,11 @@ document.addEventListener('DOMContentLoaded', () => {
 async function initializeScanPage() {
     await loadScanners();
     await loadScanJobs();
-    await loadScanFiles();
     setupScanForm();
     setupRangeInputs();
 
     // Start auto-refresh for jobs
     ScanPage.jobsRefreshInterval = setInterval(loadScanJobs, 5000); // Every 5 seconds
-    // setInterval(loadScanFiles, 5000); // Every 5 seconds
 }
 
 // Load and display scanners
@@ -102,10 +100,9 @@ function populateScannerDropdown() {
 
     ScanPage.scanners.forEach(scanner => {
         const option = document.createElement('option');
-        option.value = scanner.name; // Keep the actual device name for API
-        // Display human-readable vendor and model
-        const displayName = `${scanner.vendor} ${scanner.model}`;
-        option.textContent = displayName;
+        option.value = scanner.name;
+
+        option.textContent = `${scanner.vendor} ${scanner.model}`;
         select.appendChild(option);
     });
 }
@@ -128,8 +125,7 @@ function getScannerDisplayName(deviceName) {
 // Load and display scan jobs
 async function loadScanJobs() {
     try {
-        const jobs = await API.get('/scan/jobs');
-        ScanPage.jobs = jobs;
+        ScanPage.jobs = await API.get('/scan/jobs');
         displayScanJobs();
     } catch (error) {
         console.error('Failed to load scan jobs:', error);
@@ -261,101 +257,13 @@ function getScanJobActions(job) {
     return actions.join('');
 }
 
-// Load and display scan files
-//FIXME remove
-async function loadScanFiles() {
-    try {
-        const files = await API.get('/files/scans');
-        ScanPage.scanFiles = files;
-        displayScanFiles();
-    } catch (error) {
-        console.error('Failed to load scan files:', error);
-        showFilesError();
-    }
-}
-
-//FIXME remove
-function displayScanFiles() {
-    const grid = document.getElementById('scan-files-grid');
-    if (!grid) return;
-
-    if (ScanPage.scanFiles.length === 0) {
-        grid.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-folder-open"></i>
-                <h3>No Scan Files</h3>
-                <p>Completed scans will appear here</p>
-            </div>
-        `;
-        return;
-    }
-
-    grid.innerHTML = ScanPage.scanFiles.map(file => `
-        <div class="file-card">
-            <div class="file-icon">
-                <i class="fas ${getFileIcon(file.name)}"></i>
-            </div>
-            <div class="file-info">
-                <h4 class="file-name" title="${file.name}">${truncateFilename(file.name)}</h4>
-                <p class="file-size">${Utils.formatFileSize(file.size)}</p>
-                <p class="file-date">${Utils.formatDate(file.modified)}</p>
-            </div>
-            <div class="file-actions">
-                <button class="btn btn-sm btn-success" onclick="downloadFile('${file.name}')" title="Download">
-                    <i class="fas fa-download"></i>
-                </button>
-                ${isImageFile(file.name) ? `
-                <button class="btn btn-sm btn-info" onclick="previewFile('${file.name}')" title="Preview">
-                    <i class="fas fa-eye"></i>
-                </button>
-                ` : ''}
-                <button class="btn btn-sm btn-danger" onclick="deleteScanFile('${file.name}')" title="Delete">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>
-        </div>
-    `).join('');
-}
-
-//FIXME remove
-function showFilesError() {
-    const grid = document.getElementById('scan-files-grid');
-    if (grid) {
-        grid.innerHTML = `
-            <div class="error-state">
-                <i class="fas fa-exclamation-triangle"></i>
-                <h3>Failed to Load Files</h3>
-                <button class="btn btn-secondary" onclick="refreshScanFiles()">
-                    <i class="fas fa-refresh"></i>
-                    Try Again
-                </button>
-            </div>
-        `;
-    }
-}
-
-
-//FIXME remove
-function getFileIcon(filename) {
-    const ext = filename.split('.').pop().toLowerCase();
-    const icons = {
-        'pdf': 'fa-file-pdf',
-        'jpg': 'fa-file-image',
-        'jpeg': 'fa-file-image',
-        'png': 'fa-file-image',
-        'tiff': 'fa-file-image',
-        'tif': 'fa-file-image'
-    };
-    return icons[ext] || 'fa-file';
-}
-
 function truncateFilename(filename, maxLength = 20) {
     if (!filename || filename.length <= maxLength) return filename;
 
     const ext = filename.split('.').pop();
     const name = filename.substring(0, filename.lastIndexOf('.'));
-    const truncated = name.substring(0, maxLength - ext.length - 4) + '...';
-    return truncated + '.' + ext;
+    // return truncated + '.' + ext;
+    return name.substring(0, maxLength - ext.length - 4) + '...'
 }
 
 function isImageFile(filename) {
@@ -444,6 +352,20 @@ function resetRangeInputs() {
     }
 }
 
+function timeAgo(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+}
+
 // Action functions
 async function refreshScanners() {
     const button = event.target;
@@ -465,11 +387,6 @@ async function refreshScanners() {
 async function refreshScanJobs() {
     await loadScanJobs();
     Toast.info('Scan jobs refreshed');
-}
-
-async function refreshScanFiles() {
-    await loadScanFiles();
-    Toast.info('Scan files refreshed');
 }
 
 function quickScan(scannerName) {
@@ -586,16 +503,6 @@ async function downloadScan(jobId) {
     }
 }
 
-//FIXME remove
-async function downloadFile(filename) {
-    try {
-        window.open(`/scans/${filename}`, '_blank');
-        Toast.success('Download started');
-    } catch (error) {
-        Toast.error('Download failed');
-    }
-}
-
 async function previewScan(jobId) {
     try {
         const job = await API.get(`/scan/jobs/${jobId}`);
@@ -609,11 +516,6 @@ async function previewScan(jobId) {
     } catch (error) {
         Toast.error('Preview failed');
     }
-}
-
-//FIXME remove
-async function previewFile(filename) {
-    showPreviewModal(`/scans/${filename}`, filename);
 }
 
 function showPreviewModal(url, filename) {
@@ -655,28 +557,11 @@ async function deleteScanJob(jobId) {
 
     try {
         await API.delete(`/scan/jobs/${encodeURIComponent(jobId)}`)
-
         Toast.success('Scan job deleted successfully');
-        await loadScanFiles();
         await loadScanJobs();
 
     } catch (error) {
         Toast.error(`Failed to delete job: ${error.message}`);
-    }
-}
-
-//FIXME remove
-async function deleteScanFile(filename) {
-    if (!confirm(`Are you sure you want to delete "${filename}"?`)) return;
-
-    try {
-        await API.delete(`/files/scans/${encodeURIComponent(filename)}`);
-        Toast.success('File deleted successfully');
-        await loadScanFiles();
-        await loadScanJobs();
-
-    } catch (error) {
-        Toast.error(`Failed to delete file: ${error.message}`);
     }
 }
 

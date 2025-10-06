@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use sqlx::{Row, SqlitePool};
@@ -73,6 +74,27 @@ pub struct ScanRequest {
     pub page_size: Option<PageSize>,
     pub brightness: Option<i32>,
     pub contrast: Option<i32>,
+}
+
+
+impl Eq for ScanJob {}
+
+impl PartialEq<Self> for ScanJob {
+    fn eq(&self, other: &Self) -> bool {
+        self.completed_at == other.completed_at
+    }
+}
+
+impl PartialOrd<Self> for ScanJob {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ScanJob {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.completed_at.cmp(&other.completed_at)
+    }
 }
 
 impl TryFrom<&SqliteRow> for ScanJob {
@@ -324,8 +346,8 @@ impl ScanJob {
         let rows = query_bind!(r#"
         SELECT * FROM scan_jobs
         ORDER BY created_at DESC
-        LIMIT ?;
-        "#,
+        LIMIT ?
+        ;"#,
         limit,
         ).fetch_all(pool).await?;
 
@@ -340,7 +362,7 @@ impl ScanJob {
     pub async fn get_all(pool: &SqlitePool) -> Result<Vec<ScanJob>, sqlx::Error> {
         let rows = sqlx::query(r#"
             SELECT * FROM scan_jobs
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC;
         "#
         ).fetch_all(pool).await?;
     

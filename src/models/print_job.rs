@@ -241,13 +241,13 @@ impl PrintJob {
         Ok(print_jobs?)
     }
 
-    pub async fn get_recent(limit: i32, pool: &SqlitePool) -> Result<Vec<PrintJob>, sqlx::Error> {
+    pub async fn get_recent(limit: u32, pool: &SqlitePool) -> Result<Vec<PrintJob>, sqlx::Error> {
         let rows = query_bind!(
             r#"
             SELECT * FROM print_jobs
-            ORDER BY created_at DESC;
-            LIMIT ?;
-            "#,
+            ORDER BY created_at DESC
+            LIMIT ?
+            ;"#,
             limit
         ).fetch_all(pool).await?;
     

@@ -1,7 +1,4 @@
-use std::fmt::format;
-use std::io::Error;
 use actix_web::{web, HttpRequest, HttpResponse, Result};
-use actix_web::dev::ResourcePath;
 use actix_web::error::{ErrorBadRequest, ErrorInternalServerError};
 use sqlx::{SqlitePool};
 use uuid::Uuid;
@@ -65,7 +62,7 @@ pub async fn start_scan(req: web::Json<ScanRequest>, pool: web::Data<SqlitePool>
 /// GET /api/scan/jobs - List all scan jobs
 pub async fn list_scan_jobs(pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
     //change to all in the future
-    match ScanJob::get_recent(10, pool.as_ref()).await {
+    match ScanJob::get_all(pool.as_ref()).await {
         Ok(jobs) => json_success(jobs),
         Err(e) => internal_error(format!("Failed to get recent jobs: {}", e)),
     }

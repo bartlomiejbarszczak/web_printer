@@ -1,16 +1,17 @@
-// use std::error::Error;
 use actix_web::{web, HttpResponse, Result};
 use actix_files::NamedFile;
 use actix_web::error::ErrorInternalServerError;
-// use std::path::PathBuf;
+use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
+use tokio::process::Command;
+use tokio::time::{Instant, Duration};
+
 use crate::handlers::{json_success, internal_error, json_error};
-use crate::models::{AppState, ScanJob, SystemStatus};
+use crate::models::{AppState, PrintJob, ScanJob, SystemStatus, Job};
 use crate::services::cups::CupsService;
 use crate::services::sane::SaneService;
 use crate::services::escputil::MaintenanceService;
-use tokio::process::Command;
-use tokio::time::{Instant, Duration};
+
 
 
 /// GET / - Serve main dashboard page
@@ -59,9 +60,10 @@ pub async fn get_status(app_state: web::Data<AppState>) -> Result<HttpResponse> 
     json_success(status)
 }
 
-/// GET /api/system/settings - Get system settings (placeholder)
+/// GET /api/system/settings - Get system settings
 pub async fn get_settings() -> Result<HttpResponse> {
     // TODO create table with default settings and store in database
+
     let settings = serde_json::json!({
         "default_resolution": 300,
         "auto_cleanup": true,
@@ -72,10 +74,41 @@ pub async fn get_settings() -> Result<HttpResponse> {
     json_success(settings)
 }
 
-/// POST /api/system/settings - Update system settings (placeholder)
+/// POST /api/system/settings - Update system settings
 pub async fn update_settings() -> Result<HttpResponse> {
     // TODO Implement settings update logic here
-    json_success(serde_json::json!({"message": "Settings updated successfully"}))
+
+    internal_error("Not implemented".to_string())
+}
+
+
+/// GET /api/system/get-recent - Get recent 5 jobs
+pub async fn get_recent_activity(pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
+    let limit = 5;
+
+    let (scan_jobs_r, print_jobs_r) = tokio::try_join!(
+        ScanJob::get_recent(limit, &pool),
+        PrintJob::get_recent(limit, &pool)
+    ).map_err(|e| {
+        log::error!("Error getting recent activity: {}", e);
+        ErrorInternalServerError(e)
+    })?;
+
+    let mut recent_jobs = scan_jobs_r.iter()
+        .map(|sj| Job::Scan(sj.clone()))
+        .chain(
+            print_jobs_r.iter()
+                .map(|pj| Job::Print(pj.clone())))
+        .filter(|x| was_within_last_hour(x.completed_at()))
+        .collect::<Vec<Job>>();
+
+    recent_jobs.sort();
+    recent_jobs.reverse();
+
+    let recent_jobs = recent_jobs.into_iter().take(limit as usize).collect::<Vec<Job>>();
+
+    log::info!("Successfully updated recent activity");
+    json_success(recent_jobs)
 }
 
 /// POST /api/system/nozzle/check
@@ -134,7 +167,6 @@ async fn get_uptime(start_time: Instant) -> String {
     format_duration(uptime)
 }
 
-
 fn format_duration(duration: Duration) -> String {
     let total_seconds = duration.as_secs();
 
@@ -159,4 +191,16 @@ fn format_duration(duration: Duration) -> String {
     }
 
     parts.join(" ")
+}
+
+fn was_within_last_hour(completed_at: Option<DateTime<Utc>>) -> bool {
+    let completed_at = match completed_at {
+        Some(com) => com,
+        None => return false,
+    };
+
+    let now = Utc::now();
+    let one_hour_ago = now - chrono::Duration::hours(1);
+
+    completed_at >= one_hour_ago && completed_at <= now
 }

@@ -14,21 +14,23 @@
     <header class="header">
         <div class="header-content">
             <div class="logo">
-                <i class="fas fa-scanner"></i>
+<!--                <i class="fas fa-scanner"></i>-->
+                <i class="fas fa-print"></i>
                 <h1>Scan Manager</h1>
             </div>
             <nav class="nav-links">
                 <a href="/" class="nav-link">
                     <i class="fas fa-home"></i>
-                    Dashboard
+                    <span>Dashboard</span>
                 </a>
                 <a href="/print" class="nav-link">
                     <i class="fas fa-print"></i>
-                    Print
+                    <span>Print</span>
                 </a>
                 <a href="/scan" class="nav-link active">
-                    <i class="fas fa-scanner"></i>
-                    Scan
+<!--                    <i class="fas fa-scanner"></i>-->
+                    <i class="fas fa-print"></i>
+                    <span>Scan</span>
                 </a>
             </nav>
         </div>
@@ -105,26 +107,6 @@
                         </tr>
                         </tbody>
                     </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Scan Files Section -->
-        <div class="card">
-            <div class="card-header">
-                <i class="fas fa-folder"></i>
-                <h3>Scan Files</h3>
-                <button class="btn btn-secondary btn-sm" onclick="refreshScanFiles()">
-                    <i class="fas fa-refresh"></i>
-                    Refresh
-                </button>
-            </div>
-            <div class="card-content">
-                <div class="files-grid" id="scan-files-grid">
-                    <div class="loading-placeholder">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <p>Loading scan files...</p>
-                    </div>
                 </div>
             </div>
         </div>

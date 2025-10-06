@@ -58,6 +58,7 @@ async fn main() -> io::Result<()> {
                     .route("/system/settings", web::post().to(system::update_settings))
                     .route("/system/nozzle/check", web::post().to(system::nozzle_check))
                     .route("/system/nozzle/clean", web::post().to(system::nozzle_clean))
+                    .route("/system/get-recent", web::get().to(system::get_recent_activity))
             )
             // Web pages
             .route("/", web::get().to(system::index))
