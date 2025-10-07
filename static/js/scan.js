@@ -296,6 +296,14 @@ function setupScanForm() {
             if (scanData.brightness) scanData.brightness = parseInt(scanData.brightness);
             if (scanData.contrast) scanData.contrast = parseInt(scanData.contrast);
 
+            // Remove filename if empty to use default naming
+            if (!scanData.filename || scanData.filename.trim() === '') {
+                delete scanData.filename;
+            } else {
+                // Trim whitespace from filename
+                scanData.filename = scanData.filename.trim();
+            }
+
             const result = await API.post('/scan', scanData);
 
             Toast.success(`Scan job started: ${result.job_id.substring(0, 8)}...`);

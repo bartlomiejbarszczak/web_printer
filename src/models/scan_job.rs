@@ -4,6 +4,8 @@ use chrono::{DateTime, Utc};
 use sqlx::{Row, SqlitePool};
 use sqlx::sqlite::SqliteRow;
 use uuid::Uuid;
+use std::path::Path;
+
 use crate::query_bind;
 
 
@@ -74,6 +76,7 @@ pub struct ScanRequest {
     pub page_size: Option<PageSize>,
     pub brightness: Option<i32>,
     pub contrast: Option<i32>,
+    pub filename: Option<String>,
 }
 
 
@@ -172,6 +175,9 @@ impl ScanJob {
             ScanFormat::Tiff => "tiff",
         };
 
+        let filename = request.filename.and_then(|s| Some(add_missing_extension(&s, extension)))
+            .unwrap_or_else(|| format!("scan_{}_{}.{}", Utc::now().format("%Y%m%d_%H%M%S"), &id.to_string()[..8], extension));
+
         Self {
             id,
             scanner,
@@ -182,11 +188,7 @@ impl ScanJob {
             page_size: request.page_size.unwrap_or(PageSize::A4),
             brightness: request.brightness.unwrap_or(0),
             contrast: request.contrast.unwrap_or(0),
-            output_filename: Some(format!("scan_{}_{}.{}",
-                                          Utc::now().format("%Y%m%d_%H%M%S"),
-                                          &id.to_string()[..8],
-                                          extension
-            )),
+            output_filename: Some(filename),
             created_at: Utc::now(),
             started_at: None,
             completed_at: None,
@@ -407,5 +409,18 @@ impl ScanJob {
     }
 }
 
+
+/// Helper function to add extension to filename if missing
+fn add_missing_extension(filename: &str, extension: &str) -> String {
+    let path = Path::new(filename);
+
+    if path.extension().is_some() {
+        return filename.to_string();
+    }
+
+    let ext = extension.trim_start_matches('.');
+
+    format!("{}.{}", filename, ext)
+}
 
 
