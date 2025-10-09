@@ -162,22 +162,25 @@
 <div id="print-modal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>Print Document</h3>
+            <h3>New Print Job</h3>
             <button class="close-btn" onclick="closePrintDialog()">
                 <i class="fas fa-times"></i>
             </button>
         </div>
         <form id="print-form" enctype="multipart/form-data">
             <div class="form-group">
-                <label for="print-file">Select File</label>
-                <input type="file" id="print-file" name="file" accept=".pdf,.doc,.docx,.txt,.jpg,.png" required>
+                <label for="print-file">Select File *</label>
+                <input type="file" id="print-file" name="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png" required>
+                <small class="form-help">Supported: PDF, DOC, DOCX, TXT, JPG, PNG (Max 50MB)</small>
             </div>
+
             <div class="form-group">
                 <label for="print-printer">Printer</label>
                 <select id="print-printer" name="printer">
                     <option value="">Default Printer</option>
                 </select>
             </div>
+
             <div class="form-row">
                 <div class="form-group">
                     <label for="print-copies">Copies</label>
@@ -186,27 +189,46 @@
                 <div class="form-group">
                     <label for="print-pages">Pages</label>
                     <input type="text" id="print-pages" name="pages" placeholder="e.g., 1-5,8">
+                    <small class="form-help">Leave empty for all pages</small>
                 </div>
             </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="print-page-size">Media Size</label>
+                    <select id="print-page-size" name="page_size">
+                        <option value="a4" selected>A4</option>
+                        <option value="a5">A5</option>
+                        <option value="a6">A6</option>
+                        <option value="b5">B5</option>
+                        <option value="b6">B6</option>
+                        <option value="postcard">Postcard</option>
+                        <option value="letter">Letter</option>
+                        <option value="legal">Legal</option>
+                    </select>
+                </div>
+            </div>
+
             <div class="form-row">
                 <div class="form-group">
                     <label class="checkbox-label">
                         <input type="checkbox" id="print-duplex" name="duplex">
-                        Double-sided
+                        Double-sided printing
                     </label>
                 </div>
                 <div class="form-group">
                     <label class="checkbox-label">
                         <input type="checkbox" id="print-color" name="color" checked>
-                        Color
+                        Color printing
                     </label>
                 </div>
             </div>
+
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" onclick="closePrintDialog()">Cancel</button>
                 <button type="submit" class="btn btn-primary">
                     <i class="fas fa-print"></i>
-                    Print
+                    Start Printing
                 </button>
             </div>
         </form>
@@ -217,35 +239,37 @@
 <div id="scan-modal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>Start Scan</h3>
+            <h3>New Scan Job</h3>
             <button class="close-btn" onclick="closeScanDialog()">
                 <i class="fas fa-times"></i>
             </button>
         </div>
         <form id="scan-form">
             <div class="form-group">
-                <label for="scan-scanner">Scanner</label>
+                <label for="scan-scanner">Scanner *</label>
                 <select id="scan-scanner" name="scanner" required>
                     <option value="">Select Scanner</option>
                 </select>
             </div>
+
             <div class="form-group">
                 <label for="scan-filename">File Name</label>
-                <input type="text" id="scan-filename" name="filename" placeholder="Optional: e.g., scan_2025">
+                <input type="text" id="scan-filename" name="filename" placeholder="Optional: e.g., document_2024">
                 <small class="form-help">Leave empty for automatic naming</small>
             </div>
+
             <div class="form-row">
                 <div class="form-group">
                     <label for="scan-resolution">Resolution</label>
                     <select id="scan-resolution" name="resolution">
-                        <option value="150">150 DPI</option>
-                        <option value="300" selected>300 DPI</option>
-                        <option value="600">600 DPI</option>
-                        <option value="1200">1200 DPI</option>
+                        <option value="150">150 DPI (Draft)</option>
+                        <option value="300" selected>300 DPI (Standard)</option>
+                        <option value="600">600 DPI (High Quality)</option>
+                        <option value="1200">1200 DPI (Very High)</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="scan-format">Format</label>
+                    <label for="scan-format">Output Format</label>
                     <select id="scan-format" name="format">
                         <option value="pdf" selected>PDF</option>
                         <option value="jpeg">JPEG</option>
@@ -254,25 +278,40 @@
                     </select>
                 </div>
             </div>
+
             <div class="form-row">
                 <div class="form-group">
                     <label for="scan-color-mode">Color Mode</label>
                     <select id="scan-color-mode" name="color_mode">
                         <option value="color" selected>Color</option>
                         <option value="grayscale">Grayscale</option>
-                        <option value="monochrome">Monochrome</option>
+                        <option value="monochrome">Black & White</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label for="scan-page-size">Page Size</label>
                     <select id="scan-page-size" name="page_size">
                         <option value="a4" selected>A4</option>
+                        <option value="a5">A5</option>
                         <option value="letter">Letter</option>
                         <option value="legal">Legal</option>
-                        <option value="a3">A3</option>
                     </select>
                 </div>
             </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="scan-brightness">Brightness</label>
+                    <input type="range" id="scan-brightness" name="brightness" min="-100" max="100" value="0">
+                    <span class="range-value" id="brightness-value">0</span>
+                </div>
+                <div class="form-group">
+                    <label for="scan-contrast">Contrast</label>
+                    <input type="range" id="scan-contrast" name="contrast" min="-100" max="100" value="0">
+                    <span class="range-value" id="contrast-value">0</span>
+                </div>
+            </div>
+
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" onclick="closeScanDialog()">Cancel</button>
                 <button type="submit" class="btn btn-primary">
