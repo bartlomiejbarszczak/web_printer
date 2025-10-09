@@ -1,18 +1,8 @@
 use tokio::process::Command;
 use crate::models::{Scanner, ScanJob};
 use crate::services::command_exists;
+use crate::capitalize;
 
-macro_rules! capitalize {
-    ($s:expr) => {{
-        let input = $s.to_lowercase();
-
-        let mut chars: Vec<char> = input.chars().collect();
-        if let Some(first_char) = chars.get_mut(0) {
-            *first_char = first_char.to_uppercase().next().unwrap_or(*first_char);
-        }
-        chars.into_iter().collect::<String>()
-    }};
-}
 
 
 pub struct SaneService;
@@ -176,6 +166,8 @@ impl SaneService {
 
 #[cfg(test)]
 mod tests {
+    use super::capitalize;
+
     #[test]
     fn test_capitalize() {
         assert_eq!(capitalize!("hello"), "Hello");

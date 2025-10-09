@@ -17,7 +17,7 @@ pub struct ScanJob {
     pub resolution: u32,
     pub format: ScanFormat,
     pub color_mode: ColorMode,
-    pub page_size: PageSize,    // Not used
+    pub page_size: ScanPageSize,    // Not used
     pub brightness: i32,        // Not used
     pub contrast: i32,          // Not used
     pub output_filename: Option<String>,
@@ -59,11 +59,11 @@ pub enum ColorMode {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
-pub enum PageSize {
+pub enum ScanPageSize {
     A4,
+    A5,
     Letter,
     Legal,
-    A3,
     Custom,
 }
 
@@ -73,7 +73,7 @@ pub struct ScanRequest {
     pub resolution: Option<u32>,
     pub format: Option<ScanFormat>,
     pub color_mode: Option<ColorMode>,
-    pub page_size: Option<PageSize>,
+    pub page_size: Option<ScanPageSize>,
     pub brightness: Option<i32>,
     pub contrast: Option<i32>,
     pub filename: Option<String>,
@@ -130,11 +130,11 @@ impl TryFrom<&SqliteRow> for ScanJob {
         };
 
         let page_size = match row.try_get("page_size")? {
-            "a4" => PageSize::A4,
-            "a3" => PageSize::A3,
-            "letter" => PageSize::Letter,
-            "legal" => PageSize::Legal,
-            "custom" => PageSize::Custom,
+            "a4" => ScanPageSize::A4,
+            "a5" => ScanPageSize::A5,
+            "letter" => ScanPageSize::Letter,
+            "legal" => ScanPageSize::Legal,
+            "custom" => ScanPageSize::Custom,
             _ => return Err(sqlx::Error::InvalidArgument("Unrecognized page size".to_string()))
         };
 
@@ -185,7 +185,7 @@ impl ScanJob {
             resolution: request.resolution.unwrap_or(300),
             format,
             color_mode: request.color_mode.unwrap_or(ColorMode::Color),
-            page_size: request.page_size.unwrap_or(PageSize::A4),
+            page_size: request.page_size.unwrap_or(ScanPageSize::A4),
             brightness: request.brightness.unwrap_or(0),
             contrast: request.contrast.unwrap_or(0),
             output_filename: Some(filename),
@@ -251,11 +251,11 @@ impl ScanJob {
         };
 
         let page_size_str = match self.page_size {
-            PageSize::A4 => { "a4" },
-            PageSize::A3 => { "a3" },
-            PageSize::Letter => { "letter" }
-            PageSize::Legal => { "legal" }
-            PageSize::Custom => { "custom" }
+            ScanPageSize::A4 => { "a4" },
+            ScanPageSize::A5 => { "a5" },
+            ScanPageSize::Letter => { "letter" }
+            ScanPageSize::Legal => { "legal" }
+            ScanPageSize::Custom => { "custom" }
         };
 
         let query = query_bind!(

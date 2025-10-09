@@ -6,7 +6,7 @@ use uuid::Uuid;
 use actix_web::error::{ErrorInternalServerError};
 use sqlx::SqlitePool;
 use crate::handlers::{json_success, json_error, internal_error};
-use crate::models::{PrintJob, PrintRequest, PrintJobStatus};
+use crate::models::{PrintJob, PrintRequest, PrintJobStatus, PrintPageSize};
 use crate::services::cups::CupsService;
 
 
@@ -99,6 +99,8 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
         color: Some(form_data.get("color")
             .map(|s| s == "true" || s == "on")
             .unwrap_or(true)),
+        page_size: form_data.get("page_size")
+            .cloned().map(|s| { PrintPageSize::from(s)} )
     };
     
     let available_printers = match cups_service.get_printers().await {

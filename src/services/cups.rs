@@ -1,6 +1,7 @@
 use tokio::process::Command;
 use crate::models::{Printer, PrintJob};
 use crate::services::command_exists;
+use crate::capitalize;
 
 pub struct CupsService;
 
@@ -148,6 +149,10 @@ impl CupsService {
             false => "MONO".to_string()
         };
         cmd.args(["-o", format!("Ink={color_mode}").as_str()]);
+
+        // Set media size
+        let media_size = capitalize!(job.page_size.to_string());
+        cmd.args(["-o", format!("PageSize={media_size}").as_str()]);
 
         // Add the file to print
         cmd.arg(file_path);

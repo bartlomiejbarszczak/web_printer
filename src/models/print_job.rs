@@ -23,6 +23,7 @@ pub struct PrintJob {
     pub completed_at: Option<DateTime<Utc>>,
     pub error_message: Option<String>,
     pub cups_job_id: Option<i32>,
+    pub page_size: PrintPageSize,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -36,6 +37,19 @@ pub enum PrintJobStatus {
     Cancelled,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum PrintPageSize {
+    A4,
+    A5,
+    A6,
+    B5,
+    B6,
+    Postcard,
+    Letter,
+    Legal,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct PrintRequest {
     pub printer: Option<String>,
@@ -43,6 +57,7 @@ pub struct PrintRequest {
     pub pages: Option<String>,
     pub duplex: Option<bool>,
     pub color: Option<bool>,
+    pub page_size: Option<PrintPageSize>
 }
 
 
@@ -60,6 +75,44 @@ impl Display for PrintJobStatus {
     }
 }
 
+
+impl Display for PrintPageSize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            PrintPageSize::A4 => "a4".to_string(),
+            PrintPageSize::A5 => "a5".to_string(),
+            PrintPageSize::A6 => "a6".to_string(),
+            PrintPageSize::B5 => "b5".to_string(),
+            PrintPageSize::B6 => "b6".to_string(),
+            PrintPageSize::Postcard => "postcard".to_string(),
+            PrintPageSize::Letter => "letter".to_string(),
+            PrintPageSize::Legal => "legal".to_string(),
+        };
+        
+        write!(f, "{}", str)
+    }
+}
+
+impl PrintPageSize {
+    pub fn from(s: String) -> PrintPageSize {
+        match s.as_ref() {
+            "a4" => PrintPageSize::A4,
+            "a5" => PrintPageSize::A5,
+            "a6" => PrintPageSize::A6,
+            "b5" => PrintPageSize::B5,
+            "b6" => PrintPageSize::B6,
+            "postcard" => PrintPageSize::Postcard,
+            "letter" => PrintPageSize::Letter,
+            "legal" => PrintPageSize::Legal,
+            _ => {
+                log::warn!("Unsupported page size: {}.\tUsing the A4 page size", s);
+                PrintPageSize::A4
+            },
+        }
+    }
+}
+
+
 impl TryFrom<&SqliteRow> for PrintJob {
     type Error = sqlx::Error;
 
@@ -76,6 +129,19 @@ impl TryFrom<&SqliteRow> for PrintJob {
                 return Err(sqlx::Error::InvalidArgument("Unrecognized status".to_string()))
             }
         };
+
+        let page_size = match row.try_get("page_size")? {
+            "a4" => PrintPageSize::A4,
+            "a5" => PrintPageSize::A5,
+            "a6" => PrintPageSize::A6,
+            "b5" => PrintPageSize::B5,
+            "b6" => PrintPageSize::B6,
+            "postcard" => PrintPageSize::Postcard,
+            "letter" => PrintPageSize::Letter,
+            "legal" => PrintPageSize::Legal,
+            _ => return Err(sqlx::error::Error::InvalidArgument("Unrecognized status".to_string()))
+        };
+        
 
         let uuid = Uuid::parse_str(row.try_get("job_uuid")?)
             .map_err(|e| {sqlx::Error::InvalidArgument(e.to_string())})?;
@@ -95,6 +161,7 @@ impl TryFrom<&SqliteRow> for PrintJob {
             completed_at: row.try_get("completed_at")?,
             error_message: row.try_get("error_message")?,
             cups_job_id: row.try_get("cups_id_job")?,
+            page_size,
         })
     }
 }
@@ -115,6 +182,7 @@ impl PrintJob {
             completed_at: None,
             error_message: None,
             cups_job_id: None,
+            page_size: request.page_size.unwrap_or(PrintPageSize::A4),
         }
     }
 
@@ -147,6 +215,7 @@ impl PrintJob {
 
     pub async fn save_to_db(&self, pool: &SqlitePool) -> Result<u64, sqlx::Error> {
         let status_str = self.status.to_string();
+        let page_size_str = self.page_size.to_string();
 
         let format = Path::new(self.filename.as_str()).extension().and_then(OsStr::to_str);
 
@@ -155,8 +224,8 @@ impl PrintJob {
             INSERT INTO print_jobs (
                 job_uuid, cups_id_job, printer_name, filename, filepath, status,
                 created_at, started_at, completed_at, error_message, copies,
-                pages_range, duplex, color, original_filename, mime_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                pages_range, duplex, color, page_size, original_filename, mime_type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             "#,
             self.id.to_string(),
             self.cups_job_id,
@@ -172,6 +241,7 @@ impl PrintJob {
             self.pages.clone(),
             self.duplex,
             self.color,
+            page_size_str,
             self.filename.clone(),
             format
         ).execute(pool).await?;
