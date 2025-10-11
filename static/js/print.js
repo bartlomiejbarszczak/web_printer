@@ -127,7 +127,7 @@ function displayPrintJobs() {
     if (PrintPage.jobs.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="empty-state">
+                <td colspan="8" class="empty-state">
                     <i class="fas fa-print"></i>
                     <h3>No Print Jobs</h3>
                     <p>Start printing to see jobs here</p>
@@ -140,23 +140,28 @@ function displayPrintJobs() {
     tbody.innerHTML = PrintPage.jobs.map(job => `
         <tr class="job-row job-${job.status.toLowerCase()}">
             <td>
-                <code class="job-id" title="${job.id}">${Utils.formatJobId(job.id)}</code>
-            </td>
-            <td>
                 <span class="filename" title="${job.filename}">${job.filename}</span>
             </td>
             <td>
                 <span class="printer-name">${job.printer}</span>
             </td>
             <td>
-                <span class="status-badge status-${job.status.toLowerCase()}">
-                    <i class="fas ${getStatusIcon(job.status)}"></i>
-                    ${job.status}
+                <span class="copies-count">${job.copies || 1}</span>
+            </td>
+            <td>
+                <span class="color-mode ${job.color ? 'color-yes' : 'color-no'}">
+                    ${job.color ? 'Color' : 'Grayscale'}
                 </span>
             </td>
             <td>
                 <span class="job-time" title="${new Date(job.created_at).toLocaleString()}">
                     ${timeAgo(job.created_at)}
+                </span>
+            </td>
+            <td>
+                <span class="status-badge status-${job.status.toLowerCase()}">
+                    <i class="fas ${getStatusIcon(job.status)}"></i>
+                    ${job.status}
                 </span>
             </td>
             <td>

@@ -808,3 +808,24 @@ tbody tr:hover {
         padding: 0.25rem 0.5rem;
     }
 }
+
+/* Color Mode Display */
+.color-mode {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.color-mode.color-yes {
+    /*color: var(--primary-color);*/
+    color: var(--text-primary);
+}
+
+.color-mode.color-no {
+    /*color: var(--text-muted);*/
+    color: var(--text-primary);
+}
+
+.copies-count {
+    font-weight: 500;
+    color: var(--text-primary);
+}
