@@ -516,7 +516,15 @@ function showScanDialog() {
 
 function closeScanDialog() {
     Modal.hide('scan-modal');
-    document.getElementById('scan-form')?.reset();
+    const form = document.getElementById('scan-form');
+    if (form) {
+        form.reset();
+        // Reset range values
+        const brightnessValue = document.getElementById('brightness-value');
+        const contrastValue = document.getElementById('contrast-value');
+        if (brightnessValue) brightnessValue.textContent = '0';
+        if (contrastValue) contrastValue.textContent = '0';
+    }
 }
 
 function populateScannerSelect(selectId) {
@@ -529,8 +537,7 @@ function populateScannerSelect(selectId) {
         const option = document.createElement('option');
         option.value = scanner.name; // Keep the actual device name for API
         // Display human-readable vendor and model
-        const displayName = `${scanner.vendor} ${scanner.model}`;
-        option.textContent = displayName;
+        option.textContent = `${scanner.vendor} ${scanner.model}`;
         select.appendChild(option);
     });
 }
@@ -602,6 +609,28 @@ function setupDashboardForms() {
             } catch (error) {
                 Toast.error(error.message);
             }
+        });
+    }
+
+    // Setup range input listeners for scan form
+    setupScanRangeInputs();
+}
+
+function setupScanRangeInputs() {
+    const brightnessRange = document.getElementById('scan-brightness');
+    const contrastRange = document.getElementById('scan-contrast');
+    const brightnessValue = document.getElementById('brightness-value');
+    const contrastValue = document.getElementById('contrast-value');
+
+    if (brightnessRange && brightnessValue) {
+        brightnessRange.addEventListener('input', (e) => {
+            brightnessValue.textContent = e.target.value;
+        });
+    }
+
+    if (contrastRange && contrastValue) {
+        contrastRange.addEventListener('input', (e) => {
+            contrastValue.textContent = e.target.value;
         });
     }
 }
