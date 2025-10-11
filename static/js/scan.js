@@ -333,14 +333,26 @@ function setupRangeInputs() {
     if (brightnessRange && brightnessValue) {
         brightnessRange.addEventListener('input', (e) => {
             brightnessValue.textContent = e.target.value;
+            updateSliderBackground(e.target);
         });
+        updateSliderBackground(brightnessRange);
     }
 
     if (contrastRange && contrastValue) {
         contrastRange.addEventListener('input', (e) => {
             contrastValue.textContent = e.target.value;
+            updateSliderBackground(e.target);
         });
+        updateSliderBackground(contrastRange);
     }
+}
+
+function updateSliderBackground(slider) {
+    const min = slider.min || 0;
+    const max = slider.max || 100;
+    const value = slider.value;
+    const percentage = ((value - min) / (max - min)) * 100;
+    slider.style.background = `linear-gradient(to right, var(--primary-light) 0%, var(--primary-light) ${percentage}%, var(--bg-tertiary) ${percentage}%, var(--bg-tertiary) 100%)`;
 }
 
 function resetRangeInputs() {

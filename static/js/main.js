@@ -379,7 +379,7 @@ function displayRecentActivity(jobs) {
     container.innerHTML = jobs.map(job => {
         const isPrint = job.Print !== undefined;
         const jobData = isPrint ? job.Print : job.Scan;
-        const icon = isPrint ? 'print' : 'scanner';
+        const icon = isPrint ? 'print' : 'scan';
         const type = isPrint ? 'Print' : 'Scan';
         const name = truncateFilename(isPrint ? jobData.filename : (jobData.output_filename || 'Scan'), 20);
 
@@ -616,6 +616,25 @@ function setupDashboardForms() {
     setupScanRangeInputs();
 }
 
+// function setupScanRangeInputs() {
+//     const brightnessRange = document.getElementById('scan-brightness');
+//     const contrastRange = document.getElementById('scan-contrast');
+//     const brightnessValue = document.getElementById('brightness-value');
+//     const contrastValue = document.getElementById('contrast-value');
+//
+//     if (brightnessRange && brightnessValue) {
+//         brightnessRange.addEventListener('input', (e) => {
+//             brightnessValue.textContent = e.target.value;
+//         });
+//     }
+//
+//     if (contrastRange && contrastValue) {
+//         contrastRange.addEventListener('input', (e) => {
+//             contrastValue.textContent = e.target.value;
+//         });
+//     }
+// }
+
 function setupScanRangeInputs() {
     const brightnessRange = document.getElementById('scan-brightness');
     const contrastRange = document.getElementById('scan-contrast');
@@ -625,14 +644,26 @@ function setupScanRangeInputs() {
     if (brightnessRange && brightnessValue) {
         brightnessRange.addEventListener('input', (e) => {
             brightnessValue.textContent = e.target.value;
+            updateSliderBackground(e.target);
         });
+        updateSliderBackground(brightnessRange);
     }
 
     if (contrastRange && contrastValue) {
         contrastRange.addEventListener('input', (e) => {
             contrastValue.textContent = e.target.value;
+            updateSliderBackground(e.target);
         });
+        updateSliderBackground(contrastRange);
     }
+}
+
+function updateSliderBackground(slider) {
+    const min = slider.min || 0;
+    const max = slider.max || 100;
+    const value = slider.value;
+    const percentage = ((value - min) / (max - min)) * 100;
+    slider.style.background = `linear-gradient(to right, var(--primary-light) 0%, var(--primary-light) ${percentage}%, var(--bg-tertiary) ${percentage}%, var(--bg-tertiary) 100%)`;
 }
 
 // Initialize everything when DOM is loaded

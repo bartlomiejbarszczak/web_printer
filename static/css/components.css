@@ -1,4 +1,6 @@
-/* Modal Styles */
+/* ============================================
+   MODAL STYLES
+   ============================================ */
 .modal {
     display: none;
     position: fixed;
@@ -28,6 +30,10 @@
     max-height: 90vh;
     overflow-y: auto;
     animation: slideUp 0.3s ease-out;
+}
+
+.modal-large {
+    max-width: 900px;
 }
 
 .modal-header {
@@ -69,7 +75,9 @@
     margin-top: 1rem;
 }
 
-/* Form Styles */
+/* ============================================
+   FORM STYLES
+   ============================================ */
 form {
     padding: 1.5rem;
 }
@@ -103,6 +111,7 @@ label {
     font-style: italic;
 }
 
+/* Text Inputs, Selects, Textareas */
 input[type="text"],
 input[type="number"],
 input[type="file"],
@@ -128,6 +137,7 @@ textarea:focus {
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
+/* File Input */
 input[type="file"] {
     cursor: pointer;
     padding: 0.5rem;
@@ -150,61 +160,9 @@ input[type="file"]::-webkit-file-upload-button:hover {
     color: var(--text-primary);
 }
 
-/* Range Input Styles */
-input[type="range"] {
-    width: 100%;
-    height: 0.375rem;
-    background: var(--bg-tertiary);
-    border-radius: var(--radius-sm);
-    outline: none;
-    padding: 0;
-}
-
-input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 1rem;
-    height: 1rem;
-    background: var(--primary-color);
-    border-radius: 50%;
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-input[type="range"]::-webkit-slider-thumb:hover {
-    transform: scale(1.2);
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
-}
-
-input[type="range"]::-moz-range-thumb {
-    width: 1rem;
-    height: 1rem;
-    background: var(--primary-color);
-    border-radius: 50%;
-    cursor: pointer;
-    border: none;
-    transition: var(--transition);
-}
-
-input[type="range"]::-moz-range-thumb:hover {
-    transform: scale(1.2);
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
-}
-
-.range-value {
-    display: inline-block;
-    min-width: 2.5rem;
-    text-align: center;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--primary-color);
-    background: var(--bg-tertiary);
-    padding: 0.25rem 0.5rem;
-    border-radius: var(--radius-sm);
-    margin-left: 0.5rem;
-}
-
-/* Checkbox Styles */
+/* ============================================
+   CHECKBOX STYLES
+   ============================================ */
 .checkbox-label {
     display: flex !important;
     flex-direction: row !important;
@@ -229,119 +187,94 @@ input[type="checkbox"] {
     accent-color: var(--primary-color);
 }
 
-/* Progress Bar */
-.progress-bar {
+/* ============================================
+   RANGE SLIDER STYLES (Beautiful!)
+   ============================================ */
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
     width: 100%;
-    height: 0.5rem;
-    background-color: var(--bg-tertiary);
-    border-radius: var(--radius-sm);
-    overflow: hidden;
+    height: 6px;
+    background: linear-gradient(to right, var(--primary-light) 0%, var(--primary-light) 50%, var(--bg-tertiary) 50%, var(--bg-tertiary) 100%);
+    border-radius: var(--radius-full);
+    outline: none;
+    padding: 0;
+    margin: 0.5rem 0;
+    transition: opacity 0.2s;
 }
 
-.progress-fill {
-    height: 100%;
-    background-color: var(--primary-color);
-    transition: width 0.3s ease;
-    border-radius: var(--radius-sm);
+input[type="range"]:hover {
+    opacity: 0.9;
 }
 
-.progress-bar.active .progress-fill {
-    background: linear-gradient(90deg, var(--primary-color), var(--primary-dark));
-    animation: progressPulse 2s ease-in-out infinite;
-}
-
-.progress-bar.error .progress-fill {
-    background-color: var(--error-color);
-}
-
-@keyframes progressPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-}
-
-/* Toast Notifications */
-.toast-container {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    z-index: 1100;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.toast {
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-md);
-    padding: 1rem;
-    min-width: 300px;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    animation: slideInRight 0.3s ease-out;
-}
-
-.toast.success {
-    border-left: 4px solid var(--success-color);
-}
-
-.toast.error {
-    border-left: 4px solid var(--error-color);
-}
-
-.toast.warning {
-    border-left: 4px solid var(--warning-color);
-}
-
-.toast-icon {
-    font-size: 1.25rem;
-}
-
-.toast.success .toast-icon {
-    color: var(--success-color);
-}
-
-.toast.error .toast-icon {
-    color: var(--error-color);
-}
-
-.toast.warning .toast-icon {
-    color: var(--warning-color);
-}
-
-.toast-content {
-    flex: 1;
-}
-
-.toast-title {
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 0.25rem;
-}
-
-.toast-message {
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-}
-
-.toast-close {
-    background: none;
-    border: none;
-    color: var(--text-muted);
+/* Webkit (Chrome, Safari, Edge) */
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border: 3px solid var(--primary-color);
+    border-radius: 50%;
     cursor: pointer;
-    padding: 0.25rem;
-    border-radius: var(--radius-sm);
-    transition: var(--transition);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
 }
 
-.toast-close:hover {
-    background-color: var(--bg-tertiary);
-    color: var(--text-primary);
+input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.1);
 }
 
-/* Table Styles */
+input[type="range"]::-webkit-slider-thumb:active {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 12px rgba(37, 99, 235, 0.2);
+}
+
+/* Firefox */
+input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: white;
+    border: 3px solid var(--primary-color);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.1);
+}
+
+input[type="range"]::-moz-range-thumb:active {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 12px rgba(37, 99, 235, 0.2);
+}
+
+input[type="range"]::-moz-range-track {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-full);
+    height: 6px;
+}
+
+.range-value {
+    display: inline-block;
+    min-width: 3rem;
+    text-align: center;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    background: rgba(37, 99, 235, 0.1);
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius-md);
+    margin-left: 0.75rem;
+}
+
+/* ============================================
+   TABLE STYLES
+   ============================================ */
 .table-container {
     overflow-x: auto;
     border-radius: var(--radius-md);
@@ -381,16 +314,22 @@ tbody tr:hover {
     background-color: var(--bg-secondary);
 }
 
-/* Status Badges */
+/* ============================================
+   STATUS BADGES
+   ============================================ */
 .status-badge {
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
     padding: 0.25rem 0.75rem;
-    border-radius: 9999px;
+    border-radius: var(--radius-full);
     font-size: 0.75rem;
     font-weight: 500;
     text-transform: capitalize;
+}
+
+.status-badge i {
+    font-size: 0.625rem;
 }
 
 .status-badge.queued {
@@ -416,11 +355,9 @@ tbody tr:hover {
     color: var(--error-color);
 }
 
-.status-badge i {
-    font-size: 0.625rem;
-}
-
-/* Format Badges */
+/* ============================================
+   FORMAT BADGES
+   ============================================ */
 .format-badge {
     display: inline-block;
     padding: 0.25rem 0.5rem;
@@ -451,10 +388,46 @@ tbody tr:hover {
     color: var(--primary-color);
 }
 
-/* Action Buttons */
+/* ============================================
+   PROGRESS BAR
+   ============================================ */
+.progress-bar {
+    width: 100%;
+    height: 0.5rem;
+    background-color: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: var(--primary-color);
+    transition: width 0.3s ease;
+    border-radius: var(--radius-sm);
+}
+
+.progress-bar.active .progress-fill {
+    background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+    animation: progressPulse 2s ease-in-out infinite;
+}
+
+.progress-bar.error .progress-fill {
+    background-color: var(--error-color);
+}
+
+@keyframes progressPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* ============================================
+   ACTION BUTTONS
+   ============================================ */
+.job-actions,
 .action-buttons {
     display: flex;
     gap: 0.5rem;
+    justify-content: center;
 }
 
 .action-btn {
@@ -477,14 +450,101 @@ tbody tr:hover {
     color: var(--error-color);
 }
 
-/* Job Actions */
-.job-actions {
+/* ============================================
+   TOAST NOTIFICATIONS
+   ============================================ */
+.toast-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1100;
     display: flex;
+    flex-direction: column;
     gap: 0.5rem;
-    justify-content: center;
 }
 
-/* Empty State */
+.toast {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: 1rem;
+    min-width: 300px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    animation: slideInRight 0.3s ease-out;
+}
+
+.toast.success {
+    border-left: 4px solid var(--success-color);
+}
+
+.toast.error {
+    border-left: 4px solid var(--error-color);
+}
+
+.toast.warning {
+    border-left: 4px solid var(--warning-color);
+}
+
+.toast.info {
+    border-left: 4px solid var(--info-color);
+}
+
+.toast-icon {
+    font-size: 1.25rem;
+}
+
+.toast.success .toast-icon {
+    color: var(--success-color);
+}
+
+.toast.error .toast-icon {
+    color: var(--error-color);
+}
+
+.toast.warning .toast-icon {
+    color: var(--warning-color);
+}
+
+.toast.info .toast-icon {
+    color: var(--info-color);
+}
+
+.toast-content {
+    flex: 1;
+}
+
+.toast-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.toast-message {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+
+.toast-close:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
 .empty-state {
     text-align: center;
     padding: 3rem 1rem;
@@ -509,100 +569,9 @@ tbody tr:hover {
     font-size: 0.875rem;
 }
 
-/* Job Details Modal Styles */
-.job-details {
-    padding: 1.5rem;
-}
-
-.detail-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid var(--border-light);
-}
-
-.detail-row:last-child {
-    border-bottom: none;
-}
-
-.detail-row strong {
-    color: var(--text-primary);
-    font-weight: 600;
-    font-size: 0.875rem;
-}
-
-.detail-row span,
-.detail-row code {
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-    text-align: right;
-}
-
-/* Animations */
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes slideInRight {
-    from {
-        opacity: 0;
-        transform: translateX(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .modal-content {
-        margin: 1rem;
-        max-width: none;
-    }
-
-    .form-row {
-        grid-template-columns: 1fr;
-        gap: 0;
-    }
-
-    .modal-actions {
-        flex-direction: column;
-    }
-
-    .toast-container {
-        left: 1rem;
-        right: 1rem;
-    }
-
-    .toast {
-        min-width: auto;
-    }
-
-    .table-container {
-        font-size: 0.75rem;
-    }
-
-    th,
-    td {
-        padding: 0.5rem;
-    }
-}
-
-/* Job Details Modal Styles */
+/* ============================================
+   JOB DETAILS MODAL
+   ============================================ */
 .job-details {
     padding: 1.5rem;
 }
@@ -657,11 +626,9 @@ tbody tr:hover {
     font-weight: 500;
 }
 
-/* Preview Modal */
-.modal-large {
-    max-width: 900px;
-}
-
+/* ============================================
+   PREVIEW MODAL
+   ============================================ */
 .preview-content {
     padding: 1.5rem;
     max-height: 70vh;
@@ -693,7 +660,66 @@ tbody tr:hover {
     margin-bottom: 0.5rem;
 }
 
-/* Animations */
+/* ============================================
+   FILES GRID
+   ============================================ */
+.files-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.file-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    transition: var(--transition);
+}
+
+.file-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.file-icon {
+    font-size: 3rem;
+    color: var(--primary-color);
+}
+
+.file-info {
+    text-align: center;
+    width: 100%;
+}
+
+.file-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+    word-break: break-word;
+}
+
+.file-size,
+.file-date {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.file-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -721,7 +747,9 @@ tbody tr:hover {
     }
 }
 
-/* Responsive adjustments */
+/* ============================================
+   RESPONSIVE DESIGN
+   ============================================ */
 @media (max-width: 768px) {
     .modal-content {
         margin: 1rem;
@@ -768,5 +796,15 @@ tbody tr:hover {
     .detail-row span,
     .detail-row code {
         text-align: left;
+    }
+
+    .files-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+
+    .range-value {
+        margin-left: 0.5rem;
+        min-width: 2.5rem;
+        padding: 0.25rem 0.5rem;
     }
 }
