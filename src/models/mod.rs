@@ -1,10 +1,12 @@
 pub mod print_job;
 pub mod scan_job;
+pub mod scan_queue;
 
 use std::cmp::Ordering;
 use chrono::{DateTime, Utc};
 pub use print_job::*;
 pub use scan_job::*;
+pub use scan_queue::*;
 
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;

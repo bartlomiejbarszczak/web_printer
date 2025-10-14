@@ -4,7 +4,7 @@ use sqlx::{SqlitePool};
 use uuid::Uuid;
 
 use crate::handlers::{json_success, json_error, internal_error};
-use crate::models::{ScanJob, ScanRequest, ScanJobStatus};
+use crate::models::{ScanJob, ScanRequest, ScanJobStatus, ScanJobQueue, add_to_scan_queue, notify_scan_queue};
 use crate::services::sane::SaneService;
 
 
@@ -23,7 +23,7 @@ pub async fn list_scanners() -> Result<HttpResponse> {
 }
 
 /// POST /api/scan - Start a scan job
-pub async fn start_scan(req: web::Json<ScanRequest>, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
+pub async fn start_scan(req: web::Json<ScanRequest>, pool: web::Data<SqlitePool>, s_queue: web::Data<ScanJobQueue>) -> Result<HttpResponse> {
     let sane_service = SaneService::new();
 
     if !sane_service.is_available().await {
@@ -31,32 +31,35 @@ pub async fn start_scan(req: web::Json<ScanRequest>, pool: web::Data<SqlitePool>
     }
 
     let scanner_name = req.scanner.clone()
-        .ok_or_else(|| json_error("Scanner must be specified".to_string())).map_err(|_| ErrorBadRequest("Validation error".to_string()))?;
+        .ok_or_else(|| ErrorBadRequest("Scanner must be specified"))?;
 
     // Create scan job
     let scan_job = ScanJob::new(scanner_name, req.into_inner());
     let job_id = scan_job.id;
 
-    // Store job
-    match scan_job.save_to_db(&pool).await.map_err(|e| ErrorBadRequest(e.to_string())) {
-        Ok(added_rows) => {
-            log::info!("Successfully added {added_rows}row.");
+    // Store job in database
+    scan_job.save_to_db(&pool)
+        .await
+        .map_err(|e| ErrorBadRequest(e.to_string()))?;
 
-            tokio::spawn(async move {
-                if let Err(e) = execute_scan_job(scan_job.id, &pool).await {
-                    log::error!("Scan job {} failed: {}", job_id, e);
-                }
-            });
-            
-            json_success(serde_json::json!({
-                "job_id": job_id,
-                "status": "queued"
-            }))
-        }
-        Err(e) => {
-            json_error(e.to_string())
-        }
-    }
+    log::info!("Scan job {} saved to database", job_id);
+    
+    add_to_scan_queue(&s_queue, scan_job)
+        .await
+        .map_err(|e| ErrorInternalServerError(e.to_string()))?;
+
+    log::warn!("Notify the queue after adding job");
+
+    tokio::spawn(async move {
+        if let Err(e) = notify_scan_queue(&s_queue, &pool).await {
+            log::error!("Failed to notify scan queue: {}", e);
+        };
+    });
+
+    json_success(serde_json::json!({
+        "job_id": job_id,
+        "status": "queued"
+    }))
 }
 
 /// GET /api/scan/jobs - List all scan jobs
@@ -140,45 +143,7 @@ pub async fn download_scan(path: web::Path<Uuid>, req: HttpRequest, pool: web::D
     }
 }
 
-/// Background task to execute scan job
-async fn execute_scan_job(job_id: Uuid, pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    let sane_service = SaneService::new();
 
-    // Get job from storage
-    let mut job = match ScanJob::find_by_uuid(job_id, pool).await {
-        Ok(Some(job)) => job,
-        Ok(None) => {
-            log::warn!("Scan job {} not found in storage", job_id);
-            return Err(sqlx::Error::RowNotFound);
-        },
-        Err(e) => { return Err(e.into()) }
-    };
-
-    // Update status to scanning
-    job.set_status(ScanJobStatus::Scanning);
-    job.update_statues_in_db(pool).await.map_err(|e| e.to_string()).unwrap();
-
-    // Execute the scan
-    match sane_service.start_scan(&job).await {
-        Ok(output_path) => {
-            if let Ok(metadata) = std::fs::metadata(&output_path) {
-                job.file_size = Some(metadata.len());
-                job.file_available = true;
-            }
-            job.set_status(ScanJobStatus::Completed);
-            job.update_statues_in_db(pool).await?;
-
-            log::info!("Scan job {} completed successfully", job_id);
-        },
-        Err(e) => {
-            job.set_error(e.clone());
-            job.update_statues_in_db(pool).await?;
-
-            log::error!("Scan job {} failed: {}", job_id, e);
-        }
-    }
-    Ok(())
-}
 
 
 async fn delete_scan(filename: String, pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {

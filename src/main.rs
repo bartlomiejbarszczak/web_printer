@@ -11,6 +11,7 @@ mod database;
 
 use handlers::{print, scan, system};
 use crate::database::init_database;
+use crate::models::ScanJobQueue;
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
@@ -72,6 +73,7 @@ async fn main() -> io::Result<()> {
             .app_data(web::PayloadConfig::new(50 * 1024 * 1024)) // 50MB max
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(models::AppState { start_time: Instant::now() }))
+            .app_data(web::Data::new(ScanJobQueue::new()))
     })
         .bind("0.0.0.0:8080")?
         .run()
