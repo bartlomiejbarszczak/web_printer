@@ -48,8 +48,6 @@ pub async fn start_scan(req: web::Json<ScanRequest>, pool: web::Data<SqlitePool>
         .await
         .map_err(|e| ErrorInternalServerError(e.to_string()))?;
 
-    log::warn!("Notify the queue after adding job");
-
     tokio::spawn(async move {
         if let Err(e) = notify_scan_queue(&s_queue, &pool).await {
             log::error!("Failed to notify scan queue: {}", e);

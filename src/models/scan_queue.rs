@@ -51,23 +51,25 @@ impl ScanJobQueue {
     }
 }
 
-pub async fn add_to_scan_queue(s_queue: &ScanJobQueue, scan_job: ScanJob, ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn add_to_scan_queue(s_queue: &ScanJobQueue, scan_job: ScanJob) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     s_queue.push(scan_job).await
 }
 
 pub async fn notify_scan_queue(s_queue: &ScanJobQueue, pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
     if s_queue.is_empty().await {
         return Ok(());
-    };
-    
-    if s_queue.is_processing().await{
+    }
+
+    if s_queue.is_processing().await {
         return Ok(());
     }
 
     let queue_len = s_queue.len().await;
     log::info!("Requests in queue: {}", queue_len);
-    
-    handle_scan_job(s_queue, pool).await.err();
+
+    if let Err(e) = handle_scan_job(s_queue, pool).await {
+        log::error!("Failed to handle next job in queue: {}", e);
+    }
 
     Ok(())
 }
@@ -78,21 +80,18 @@ async fn handle_scan_job(s_queue: &ScanJobQueue, pool: &SqlitePool) -> Result<()
         s_queue.set_processing(true).await;
         execute_scan_job(scan_job.id, pool).await?;
         s_queue.set_processing(false).await;
-    };
+    }
 
     if let Err(e) = Box::pin(notify_scan_queue(s_queue, pool)).await {
         log::error!("Failed to notify scan queue: {}", e);
-    };
+    }
 
     Ok(())
 }
 
 
 /// Background task to execute scan job
-async fn execute_scan_job(
-    job_id: Uuid,
-    pool: &SqlitePool,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn execute_scan_job(job_id: Uuid, pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let sane_service = SaneService::new();
 
     // Get job from storage
@@ -114,6 +113,7 @@ async fn execute_scan_job(
     // Execute the scan
     match sane_service.start_scan(&job).await {
         Ok(output_path) => {
+            // Update job with file metadata if available
             if let Ok(metadata) = std::fs::metadata(&output_path) {
                 job.file_size = Some(metadata.len());
                 job.file_available = true;
@@ -124,6 +124,7 @@ async fn execute_scan_job(
             log::info!("Scan job {} completed successfully", job_id);
         }
         Err(e) => {
+            // Store error in job record
             job.set_error(e.clone());
             job.update_statues_in_db(pool).await?;
 
