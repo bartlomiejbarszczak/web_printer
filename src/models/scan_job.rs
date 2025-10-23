@@ -5,7 +5,6 @@ use sqlx::{Row, SqlitePool};
 use sqlx::sqlite::SqliteRow;
 use uuid::Uuid;
 use std::path::Path;
-
 use crate::query_bind;
 
 
@@ -13,6 +12,8 @@ use crate::query_bind;
 pub struct ScanJob {
     pub id: Uuid,
     pub scanner: String,
+    pub vendor: String,
+    pub model: String,
     pub status: ScanJobStatus,
     pub resolution: u32,
     pub format: ScanFormat,
@@ -144,6 +145,8 @@ impl TryFrom<&SqliteRow> for ScanJob {
         Ok(ScanJob {
             id: uuid,
             scanner: row.try_get("scanner_name")?,
+            vendor: row.try_get("vendor")?,
+            model: row.try_get("model")?,
             status,
             resolution: row.try_get("resolution")?,
             format,
@@ -165,7 +168,7 @@ impl TryFrom<&SqliteRow> for ScanJob {
 
 
 impl ScanJob {
-    pub fn new(scanner: String, request: ScanRequest) -> Self {
+    pub fn new(scanner: String, vendor: String, model: String, request: ScanRequest) -> Self {
         let id = Uuid::new_v4();
         let format = request.format.unwrap_or(ScanFormat::Pdf);
         let extension = match format {
@@ -181,6 +184,8 @@ impl ScanJob {
         Self {
             id,
             scanner,
+            vendor,
+            model,
             status: ScanJobStatus::Queued,
             resolution: request.resolution.unwrap_or(300),
             format,
@@ -261,14 +266,16 @@ impl ScanJob {
         let query = query_bind!(
             r#"
             INSERT INTO scan_jobs (
-                job_uuid, scanner_name, filename, file_path, status,
+                job_uuid, scanner_name, vendor, model, filename, file_path, status,
                 created_at, started_at, completed_at, error_message, resolution,
                 format, color_mode, page_size, brightness, contrast, file_size, file_available
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id;
             "#,
             self.id.to_string(),
             self.scanner.clone(),
+            self.vendor.clone(),
+            self.model.clone(),
             self.output_filename.clone().unwrap_or(format!("unnamed-{}", self.id)),
             self.get_file_path(),
             status_str,

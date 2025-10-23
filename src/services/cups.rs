@@ -48,8 +48,14 @@ impl CupsService {
                             "unknown"
                         }.to_string();
 
+                        let parts = name.split("_").collect::<Vec<&str>>().iter().map(|x| {capitalize!(x)}).collect::<Vec<String>>();
+                        let vendor = parts.get(0).map_or_else(|| "Unknown".to_string(), |x| x.to_string());
+                        let model = parts.get(1..).map_or_else(|| "Unknown".to_string(), |x| x.join(" "));
+
                         printers.push(Printer {
                             name: name.clone(),
+                            vendor,
+                            model,
                             description: self.get_printer_description(&name).await.unwrap_or(name.clone()),
                             status,
                             location: self.get_printer_location(&name).await,

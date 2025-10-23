@@ -1,29 +1,22 @@
-use actix_web::{web, HttpRequest, HttpResponse, Result};
+use actix_web::{web, App, HttpRequest, HttpResponse, Result};
 use actix_web::error::{ErrorBadRequest, ErrorInternalServerError};
 use sqlx::{SqlitePool};
 use uuid::Uuid;
 
 use crate::handlers::{json_success, json_error, internal_error};
-use crate::models::{ScanJob, ScanRequest, ScanJobStatus, ScanJobQueue, add_to_scan_queue, notify_scan_queue};
+use crate::models::{ScanJob, ScanRequest, ScanJobStatus, ScanJobQueue, add_to_scan_queue, notify_scan_queue, AppState};
 use crate::services::sane::SaneService;
 
 
 /// GET /api/scanners - List all available scanners
-pub async fn list_scanners() -> Result<HttpResponse> {
-    let sane_service = SaneService::new();
-
-    if !sane_service.is_available().await {
-        return json_error("SANE service is not available".to_string());
-    }
-
-    match sane_service.get_scanners().await {
-        Ok(scanners) => json_success(scanners),
-        Err(e) => internal_error(format!("Failed to get scanners: {}", e)),
-    }
+pub async fn list_scanners(app_state: web::Data<AppState>) -> Result<HttpResponse> {
+    let scanners = app_state.get_scanners().await;
+    
+    json_success(scanners)
 }
 
 /// POST /api/scan - Start a scan job
-pub async fn start_scan(req: web::Json<ScanRequest>, pool: web::Data<SqlitePool>, s_queue: web::Data<ScanJobQueue>) -> Result<HttpResponse> {
+pub async fn start_scan(req: web::Json<ScanRequest>, pool: web::Data<SqlitePool>, s_queue: web::Data<ScanJobQueue>, app_state: web::Data<AppState>) -> Result<HttpResponse> {
     let sane_service = SaneService::new();
 
     if !sane_service.is_available().await {
@@ -33,8 +26,20 @@ pub async fn start_scan(req: web::Json<ScanRequest>, pool: web::Data<SqlitePool>
     let scanner_name = req.scanner.clone()
         .ok_or_else(|| ErrorBadRequest("Scanner must be specified"))?;
 
+    let (vendor, model) = app_state.get_scanners().await
+        .iter()
+        .find(|&x| {x.name == scanner_name})
+        .map(|x| {
+            log::warn!("vendor: {}, model: {}", x.vendor, x.model);
+            (x.vendor.clone(), x.model.clone())
+        })
+        .ok_or_else(|| {
+            log::error!("Cannot find scanner '{}' in all scanners list", scanner_name);
+            ErrorInternalServerError("Scanner not found".to_string())
+        })?;
+
     // Create scan job
-    let scan_job = ScanJob::new(scanner_name, req.into_inner());
+    let scan_job = ScanJob::new(scanner_name, vendor, model, req.into_inner());
     let job_id = scan_job.id;
 
     // Store job in database

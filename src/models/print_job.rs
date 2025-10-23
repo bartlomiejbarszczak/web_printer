@@ -13,6 +13,8 @@ pub struct PrintJob {
     pub id: Uuid,
     pub filename: String,
     pub printer: String,
+    pub vendor: String,
+    pub model: String,
     pub status: PrintJobStatus,
     pub copies: u32,
     pub pages: Option<String>,
@@ -151,6 +153,8 @@ impl TryFrom<&SqliteRow> for PrintJob {
             id: uuid,
             filename: row.try_get("filename")?,
             printer: row.try_get("printer_name")?,
+            vendor: row.try_get("vendor")?,
+            model: row.try_get("model")?,
             status,
             copies: row.try_get("copies")?,
             pages: row.try_get("pages_range")?,
@@ -167,11 +171,13 @@ impl TryFrom<&SqliteRow> for PrintJob {
 }
 
 impl PrintJob {
-    pub fn new(filename: String, printer: String, request: PrintRequest) -> Self {
+    pub fn new(filename: String, printer: String, vendor: String, model: String, request: PrintRequest) -> Self {
         Self {
             id: Uuid::new_v4(),
             filename,
             printer,
+            vendor,
+            model,
             status: PrintJobStatus::Queued,
             copies: request.copies.unwrap_or(1),
             pages: request.pages,
@@ -222,14 +228,16 @@ impl PrintJob {
         let query = query_bind!(
             r#"
             INSERT INTO print_jobs (
-                job_uuid, cups_id_job, printer_name, filename, filepath, status,
+                job_uuid, cups_id_job, printer_name, vendor, model, filename, filepath, status,
                 created_at, started_at, completed_at, error_message, copies,
                 pages_range, duplex, color, page_size, original_filename, mime_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             "#,
             self.id.to_string(),
             self.cups_job_id,
             self.printer.clone(),
+            self.vendor.clone(),
+            self.model.clone(),
             self.filename.clone(),
             self.get_file_path(),
             status_str,

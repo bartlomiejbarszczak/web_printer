@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::models::{ScanJob, ScanJobStatus};
 use crate::services::sane::SaneService;
 
-#[derive(Clone)]
+
 pub struct ScanJobQueue {
     queue: Arc<Mutex<VecDeque<ScanJob>>>,
     processing: Arc<Mutex<bool>>,

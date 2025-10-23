@@ -3,30 +3,23 @@ use actix_multipart::Multipart;
 use futures_util::{TryFutureExt, TryStreamExt};
 use std::collections::HashMap;
 use uuid::Uuid;
-use actix_web::error::{ErrorInternalServerError};
+use actix_web::error::{ErrorBadRequest, ErrorInternalServerError};
 use sqlx::SqlitePool;
 use crate::handlers::{json_success, json_error, internal_error};
-use crate::models::{PrintJob, PrintRequest, PrintJobStatus, PrintPageSize};
+use crate::models::{PrintJob, PrintRequest, PrintJobStatus, PrintPageSize, AppState};
 use crate::services::cups::CupsService;
 
 
 
 /// GET /api/printers - List all available printers
-pub async fn list_printers() -> Result<HttpResponse> {
-    let cups_service = CupsService::new();
+pub async fn list_printers(app_state: web::Data<AppState>) -> Result<HttpResponse> {
+    let printers = app_state.get_printers().await;
 
-    if !cups_service.is_available().await {
-        return json_error("CUPS service is not available".to_string());
-    }
-
-    match cups_service.get_printers().await {
-        Ok(printers) => json_success(printers),
-        Err(e) => internal_error(format!("Failed to get printers: {}", e)),
-    }
+    json_success(printers)
 }
 
 /// POST /api/print - Submit a print job
-pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
+pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool>, app_state: web::Data<AppState>) -> Result<HttpResponse> {
     let cups_service = CupsService::new();
 
     if !cups_service.is_available().await {
@@ -102,14 +95,10 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
         page_size: form_data.get("page_size")
             .cloned().map(|s| { PrintPageSize::from(s)} )
     };
-    
-    let available_printers = match cups_service.get_printers().await {
-        Ok(printers) => printers,
-        Err(e) => {
-            log::error!("Failed to get available printers: {}", e);
-            return internal_error("Failed to get available printers".to_string());
-        }
-    };
+
+
+
+    let available_printers = app_state.get_printers().await;
 
     if available_printers.is_empty() {
         return json_error("No printers available".to_string());
@@ -157,8 +146,16 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
             })
     };
     log::info!("Using printer: {}", printer_name);
+    let (vendor, model) = app_state.get_printers().await
+        .iter()
+        .find(|&x| {x.name == printer_name})
+        .map(|x| (x.vendor.clone(), x.model.clone()))
+        .ok_or_else(|| {
+            log::error!("Printer '{}' not found in all printers list", printer_name);
+            ErrorBadRequest("Printer not found".to_string())
+        })?;
 
-    let mut print_job = PrintJob::new(filename.clone(), printer_name, print_request);
+    let mut print_job = PrintJob::new(filename.clone(), printer_name, vendor, model, print_request);
 
     let file_path = format!("uploads/{}", filename);
     if let Err(e) = std::fs::write(&file_path, &file_data) {

@@ -9,7 +9,11 @@ pub use scan_job::*;
 pub use scan_queue::*;
 
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc};
+use tokio::sync::{RwLock, RwLockReadGuard};
 use tokio::time::Instant;
+use crate::services::cups::CupsService;
+use crate::services::sane::SaneService;
 
 #[macro_export]
 macro_rules! query_bind {
@@ -22,16 +26,18 @@ macro_rules! query_bind {
     }};
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Printer {
     pub name: String,
+    pub vendor: String,
+    pub model: String,
     pub description: String,
     pub status: String,
     pub location: Option<String>,
     pub is_default: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Scanner {
     pub name: String,
     pub vendor: String,
@@ -50,8 +56,46 @@ pub struct SystemStatus {
 }
 
 
+#[derive(Debug, Clone)]
 pub struct AppState {
     pub start_time: Instant,
+    scanners: Arc<RwLock<Vec<Scanner>>>,
+    printers: Arc<RwLock<Vec<Printer>>>,
+}
+
+impl AppState {
+    pub async fn new() -> Self {
+        let scanners  = SaneService::new().get_scanners().await.unwrap_or_else(|e| {
+            log::warn!("No scanners collected: {}", e);
+            Vec::new()
+        });
+        let printers = CupsService::new().get_printers().await.unwrap_or_else(|e| {
+            log::warn!("No printers collected: {}", e);
+            Vec::new()
+        });
+        
+        Self {
+            start_time: Instant::now(),
+            scanners: Arc::new(RwLock::new(scanners)),
+            printers:Arc::new(RwLock::new(printers)),
+        }
+    }
+
+    pub async fn add_scanner(&mut self, scanner: Scanner) {
+        self.scanners.write().await.push(scanner);
+    }
+
+    pub async fn add_printer(&mut self, printer: Printer) {
+        self.printers.write().await.push(printer);
+    }
+
+    pub async fn get_scanners(&self) -> Vec<Scanner> { 
+        self.scanners.read().await.clone()
+    }
+
+    pub async fn get_printers(&self) -> Vec<Printer> {
+        self.printers.read().await.clone()
+    }
 }
 
 #[derive(Serialize, Deserialize)]
