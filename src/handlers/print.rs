@@ -295,6 +295,7 @@ async fn monitor_print_job(job_id: Uuid, cups_job_id: i32, pool: &SqlitePool) ->
                             "completed" => PrintJobStatus::Completed,
                             "stopped" | "aborted" => PrintJobStatus::Failed,
                             "cancelled" => PrintJobStatus::Cancelled,
+                            "idle" => PrintJobStatus::Completed,
                             _ => PrintJobStatus::Processing,
                         };
 

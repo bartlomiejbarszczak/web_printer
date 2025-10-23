@@ -10,7 +10,8 @@ pub use scan_queue::*;
 
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc};
-use tokio::sync::{RwLock, RwLockReadGuard};
+use sqlx::SqlitePool;
+use tokio::sync::{RwLock};
 use tokio::time::Instant;
 use crate::services::cups::CupsService;
 use crate::services::sane::SaneService;
@@ -109,6 +110,17 @@ impl Job {
         match self {
             Job::Scan(sj) => sj.completed_at,
             Job::Print(pr) => pr.completed_at,
+        }
+    }
+
+    pub async fn execute(&self, pool: &SqlitePool) {
+        match self {
+            Job::Scan(sj) => {
+                execute_scan_job(sj.id, pool).await.expect("Scan job failed");
+            }
+            Job::Print(pj) => {
+
+            }
         }
     }
 }

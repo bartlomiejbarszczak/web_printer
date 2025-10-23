@@ -193,44 +193,21 @@ impl CupsService {
     
     /// Get status of a specific print job
     pub async fn get_job_status(&self, job_id: i32) -> Result<String, String> {
+        // printer EPSON_L3110_Series now printing EPSON_L3110_Series-111.  enabled since Thu Oct 23 21:09:15 2025
+        // printer EPSON_L3110_Series is idle.  enabled since Thu Oct 23 21:09:42 2025
         let active_output = Command::new("lpstat")
-            .args(["-o"])
+            .arg("-p")
             .output()
             .await
-            .map_err(|e| format!("Failed to execute lpstat: {}", e))?;
+            .map_err(|e| format!("Failed to execute lp command: {}", e))?;
 
         if active_output.status.success() {
             let stdout = String::from_utf8_lossy(&active_output.stdout);
             for line in stdout.lines() {
-                log::info!("{}", line);
-                if let Some(job_part) = line.split_whitespace().next() {
-                    if let Some(parsed_job_id) = job_part.split('-').last() {
-                        if parsed_job_id == job_id.to_string() {
-                            return Ok("active".to_string());
-                        }
-                    }
-                }
-            }
-        }
-
-        let completed_output = Command::new("lpstat")
-            .args(["-W", "completed", "-o"])
-            .output()
-            .await
-            .map_err(|e| format!("Failed to execute lpstat: {}", e))?;
-
-        if !completed_output.status.success() {
-            return Err("Failed to get completed job status".to_string());
-        }
-
-        let stdout = String::from_utf8_lossy(&completed_output.stdout);
-        for line in stdout.lines() {
-            if let Some(job_part) = line.split_whitespace().next() {
-                if let Some(parsed_job_id) = job_part.split('-').last() {
-                    if parsed_job_id == job_id.to_string() {
-                        return Ok("completed".to_string());
-                    }
-                }
+                return match line.trim().split_whitespace().collect::<Vec<&str>>().get(3) {
+                    None => { Err("Abnormal line".to_string()) }
+                    Some(status) => { Ok(status.replace('.',"").trim().to_string()) }
+                };
             }
         }
 
@@ -344,6 +321,21 @@ async fn test_get_printer_metadata() -> Result<(), String> {
             "" => return Err(format!("Printer ({}) description not found", printer.name)),
             _ => ()
         }
+    }
+
+    Ok(())
+}
+
+
+#[tokio::test]
+async fn test_get_job_status() -> Result<(), String> {
+    let service = CupsService::new();
+
+    match service.get_job_status(0).await {
+        Ok(status) => {
+            assert_eq!(status, "idle");
+        }
+        Err(e) => { return Err(e) }
     }
 
     Ok(())

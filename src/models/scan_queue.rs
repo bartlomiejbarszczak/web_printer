@@ -91,7 +91,7 @@ async fn handle_scan_job(s_queue: &ScanJobQueue, pool: &SqlitePool) -> Result<()
 
 
 /// Background task to execute scan job
-async fn execute_scan_job(job_id: Uuid, pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn execute_scan_job(job_id: Uuid, pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let sane_service = SaneService::new();
 
     // Get job from storage
