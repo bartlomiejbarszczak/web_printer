@@ -5,7 +5,7 @@ edition = "2024"
 
 
 [dependencies]
-actix-web = "4.11"
+actix-web = {version = "4.11", features = ["default", "rustls-0_23", "cookies"] }
 actix-files = {version = "0.6.6", features = ["experimental-io-uring"]}
 actix-multipart = "0.7.2"
 tokio = { version = "1.47.1", features = ["full"] }
@@ -21,3 +21,12 @@ futures-util = "0.3.31"
 mime = "0.3.17"
 tempfile = "3.20.0"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "uuid", "macros"] }
+
+rustls = { version = "0.23.34", features = ["aws-lc-rs"] }
+rustls-pemfile = "2.2"
+actix-cors = "0.7.0"
+actix-governor = "0.10.0"
+
+# 9. CSRF Protection
+actix-session = { version = "0.11", features = ["cookie-session"] }
+actix-web-lab = "0.24.3"  # Contains CSRF middleware

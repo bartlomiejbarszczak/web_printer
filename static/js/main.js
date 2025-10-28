@@ -10,9 +10,39 @@ const AppState = {
 
 // API helper functions
 const API = {
+    // Store CSRF token
+    csrfToken: null,
+
+    /**
+     * Initialize API by fetching CSRF token
+     * Call this on page load before making any POST/DELETE requests
+     */
+    async initialize() {
+        try {
+            const response = await fetch('/api/csrf-token', {
+                credentials: 'include'  // Important: include cookies
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch CSRF token');
+            }
+
+            const data = await response.json();
+            this.csrfToken = data.csrf_token;
+            console.log('API initialized with CSRF protection');
+            return true;
+        } catch (error) {
+            console.error('Failed to initialize API:', error);
+            return false;
+        }
+    },
+
     async get(endpoint) {
         try {
-            const response = await fetch(`/api${endpoint}`);
+            const response = await fetch(`/api${endpoint}`, {
+                credentials: 'include'  // Include cookies for session
+            });
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
@@ -35,11 +65,18 @@ const API = {
     },
 
     async post(endpoint, data) {
+        // Check if CSRF token is available
+        if (!this.csrfToken) {
+            throw new Error('CSRF token not initialized. Call API.initialize() first.');
+        }
+
         try {
             const response = await fetch(`/api${endpoint}`, {
                 method: 'POST',
+                credentials: 'include',  // Include cookies for session
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-CSRF-Token': this.csrfToken  // Add CSRF token
                 },
                 body: JSON.stringify(data)
             });
@@ -67,9 +104,19 @@ const API = {
     },
 
     async postForm(endpoint, formData) {
+        // Check if CSRF token is available
+        if (!this.csrfToken) {
+            throw new Error('CSRF token not initialized. Call API.initialize() first.');
+        }
+
         try {
             const response = await fetch(`/api${endpoint}`, {
                 method: 'POST',
+                credentials: 'include',  // Include cookies for session
+                headers: {
+                    'X-CSRF-Token': this.csrfToken  // Add CSRF token
+                    // Don't set Content-Type - browser will set it with boundary for FormData
+                },
                 body: formData
             });
 
@@ -96,9 +143,17 @@ const API = {
     },
 
     async delete(endpoint) {
+        if (!this.csrfToken) {
+            throw new Error('CSRF token not initialized. Call API.initialize() first.');
+        }
+
         try {
             const response = await fetch(`/api${endpoint}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                credentials: 'include',
+                headers: {
+                    'X-CSRF-Token': this.csrfToken
+                }
             });
 
             if (!response.ok) {
@@ -108,7 +163,6 @@ const API = {
 
             const result = await response.json();
 
-            // Handle ApiResponse wrapper
             if (result.success !== undefined) {
                 if (!result.success) {
                     throw new Error(result.message || 'API request failed');
@@ -123,6 +177,14 @@ const API = {
         }
     }
 };
+
+// Initialize API when DOM is ready
+document.addEventListener('DOMContentLoaded', async () => {
+    const initialized = await API.initialize();
+    if (!initialized) {
+        console.error('Failed to initialize API. CSRF protection may not work.');
+    }
+});
 
 // Toast notification system
 const Toast = {
