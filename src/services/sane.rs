@@ -43,15 +43,15 @@ impl SaneService {
                         let model = self.extract_model_from_line(line);
                         let partial_name = device_part.trim();
 
-                        let name = format!("epson2:{partial_name}");
+                        // let name = format!("epson2:{partial_name}");
 
-                        // let name = match self.get_scanner_name_from_scanimage(partial_name).await {
-                        //     Ok(name) => name,
-                        //     Err(e) => {
-                        //         log::warn!("e - for {partial_name}");
-                        //         continue
-                        //     },
-                        // };
+                        let name = match self.get_scanner_name_from_scanimage(partial_name).await {
+                            Ok(name) => name,
+                            Err(e) => {
+                                log::warn!("{e} - for {partial_name}");
+                                continue
+                            },
+                        };
 
                         scanners.push(Scanner {
                             name,

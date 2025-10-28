@@ -1,10 +1,10 @@
-use actix_web::{web, App, HttpRequest, HttpResponse, Result};
+use actix_web::{web, HttpRequest, HttpResponse, Result};
 use actix_web::error::{ErrorBadRequest, ErrorInternalServerError};
 use sqlx::{SqlitePool};
 use uuid::Uuid;
 
 use crate::handlers::{json_success, json_error, internal_error};
-use crate::models::{ScanJob, ScanRequest, ScanJobStatus, ScanJobQueue, add_to_scan_queue, notify_scan_queue, AppState};
+use crate::models::{ScanJob, ScanRequest, ScanJobStatus, JobQueue, add_to_job_queue, notify_scan_queue, AppState, Job};
 use crate::services::sane::SaneService;
 
 
@@ -16,7 +16,7 @@ pub async fn list_scanners(app_state: web::Data<AppState>) -> Result<HttpRespons
 }
 
 /// POST /api/scan - Start a scan job
-pub async fn start_scan(req: web::Json<ScanRequest>, pool: web::Data<SqlitePool>, s_queue: web::Data<ScanJobQueue>, app_state: web::Data<AppState>) -> Result<HttpResponse> {
+pub async fn start_scan(req: web::Json<ScanRequest>, pool: web::Data<SqlitePool>, job_queue: web::Data<JobQueue>, app_state: web::Data<AppState>) -> Result<HttpResponse> {
     let sane_service = SaneService::new();
 
     if !sane_service.is_available().await {
@@ -49,12 +49,12 @@ pub async fn start_scan(req: web::Json<ScanRequest>, pool: web::Data<SqlitePool>
 
     log::info!("Scan job {} saved to database", job_id);
     
-    add_to_scan_queue(&s_queue, scan_job)
+    add_to_job_queue(&job_queue, Job::Scan(scan_job))
         .await
         .map_err(|e| ErrorInternalServerError(e.to_string()))?;
 
     tokio::spawn(async move {
-        if let Err(e) = notify_scan_queue(&s_queue, &pool).await {
+        if let Err(e) = notify_scan_queue(&job_queue, &pool).await {
             log::error!("Failed to notify scan queue: {}", e);
         };
     });

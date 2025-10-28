@@ -1,18 +1,20 @@
 pub mod print_job;
 pub mod scan_job;
-pub mod scan_queue;
+pub mod job_queue;
 
 use std::cmp::Ordering;
+use std::fmt::{Display, Formatter};
 use chrono::{DateTime, Utc};
 pub use print_job::*;
 pub use scan_job::*;
-pub use scan_queue::*;
+pub use job_queue::*;
 
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc};
 use sqlx::SqlitePool;
 use tokio::sync::{RwLock};
 use tokio::time::Instant;
+use uuid::Uuid;
 use crate::services::cups::CupsService;
 use crate::services::sane::SaneService;
 
@@ -64,6 +66,18 @@ pub struct AppState {
     printers: Arc<RwLock<Vec<Printer>>>,
 }
 
+impl Display for Scanner {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f,"Scanner - Name: {}, Vendor: {}, Model: {}", self.name, self.vendor, self.model)
+    }
+}
+
+impl Display for Printer {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f,"Printer - Name: {}, Vendor: {}, Model: {}", self.name, self.vendor, self.model)
+    }
+}
+
 impl AppState {
     pub async fn new() -> Self {
         let scanners  = SaneService::new().get_scanners().await.unwrap_or_else(|e| {
@@ -97,12 +111,43 @@ impl AppState {
     pub async fn get_printers(&self) -> Vec<Printer> {
         self.printers.read().await.clone()
     }
+
+    pub async fn show_devices(&self) -> String {
+        let mut devices = String::from("Scanners:\n\t");
+        let scanners = self.scanners.read().await.iter().
+            map(|scanner| {scanner.to_string()})
+            .collect::<Vec<String>>().join("\n\t");
+        devices.push_str(&scanners);
+
+        devices.push_str("\nPrinters:\n\t");
+        let printers = self.printers.read().await.iter().
+            map(|printer| {printer.to_string()})
+            .collect::<Vec<String>>().join("\n\t");
+        devices.push_str(&printers);
+
+        devices
+    }
 }
 
 #[derive(Serialize, Deserialize)]
 pub enum Job {
     Scan(ScanJob),
     Print(PrintJob),
+}
+
+impl Display for Job {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            Job::Scan(sj) => {
+                format!("ScanJob - {}", sj.id)
+            }
+            Job::Print(pj) => {
+                format!("PrintJob - {}", pj.id)
+            }
+        };
+        
+        write!(f, "{}", str)
+    }
 }
 
 impl Job {
@@ -113,13 +158,17 @@ impl Job {
         }
     }
 
-    pub async fn execute(&self, pool: &SqlitePool) {
+    pub async fn execute(&mut self, pool: &SqlitePool) {
         match self {
             Job::Scan(sj) => {
-                execute_scan_job(sj.id, pool).await.expect("Scan job failed");
+                if let Err(e) = execute_scan_job(sj.id, pool).await {
+                    log::error!("Failed to execute scan job: {}", e);
+                };
             }
             Job::Print(pj) => {
-
+                if let Err(e) = execute_print_job(pj, pool).await {
+                    log::error!("Failed to execute print job: {}", e);
+                };
             }
         }
     }

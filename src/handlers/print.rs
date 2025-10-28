@@ -6,7 +6,7 @@ use uuid::Uuid;
 use actix_web::error::{ErrorBadRequest, ErrorInternalServerError};
 use sqlx::SqlitePool;
 use crate::handlers::{json_success, json_error, internal_error};
-use crate::models::{PrintJob, PrintRequest, PrintJobStatus, PrintPageSize, AppState};
+use crate::models::{PrintJob, PrintRequest, PrintJobStatus, PrintPageSize, AppState, add_to_job_queue, Job, notify_scan_queue, JobQueue};
 use crate::services::cups::CupsService;
 
 
@@ -19,7 +19,7 @@ pub async fn list_printers(app_state: web::Data<AppState>) -> Result<HttpRespons
 }
 
 /// POST /api/print - Submit a print job
-pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool>, app_state: web::Data<AppState>) -> Result<HttpResponse> {
+pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool>, job_queue: web::Data<JobQueue>, app_state: web::Data<AppState>) -> Result<HttpResponse> {
     let cups_service = CupsService::new();
 
     if !cups_service.is_available().await {
@@ -155,52 +155,41 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
             ErrorBadRequest("Printer not found".to_string())
         })?;
 
-    let mut print_job = PrintJob::new(filename.clone(), printer_name, vendor, model, print_request);
+    let print_job = PrintJob::new(filename.clone(), printer_name, vendor, model, print_request);
+    let job_id = print_job.id;
+    let printer = print_job.printer.clone();
 
     let file_path = format!("uploads/{}", filename);
     if let Err(e) = std::fs::write(&file_path, &file_data) {
         log::error!("Failed to save uploaded file: {}", e);
         return internal_error("Failed to save uploaded file".to_string());
-    }
+    };
 
-    match cups_service.submit_print_job(&print_job, &file_path).await {
-        Ok(cups_job_id) => {
-            print_job.cups_job_id = Some(cups_job_id);
-            print_job.set_status(PrintJobStatus::Processing);
-            
-            let job_id = print_job.id;
+    print_job.save_to_db(&pool).await.map_err(|e| {
+        log::error!("Failed to save print job: {}", e);
+        ErrorInternalServerError(e.to_string())
+    })?;
 
-            print_job.save_to_db(&pool).await.map_err(|e| {
-                log::error!("Failed to save print job: {}", e);
-                ErrorInternalServerError(e.to_string())
-            })?;
-
-            // Start background job monitoring
-            tokio::spawn(async move {
-                if let Err(e) = monitor_print_job(job_id, cups_job_id, &pool).await {
-                    log::error!("Monitor print job {} failed: {}", job_id, e);
-                };
-            });
-
-            json_success(serde_json::json!({
-                "job_id": job_id,
-                "cups_job_id": cups_job_id,
-                "status": "processing",
-                "printer": print_job.printer
-            }))
-        },
-        Err(e) => {
-            print_job.set_error(e.clone());
-
-            print_job.update_statuses_in_db(&pool).await.map_err(|e| {
-                log::error!("Failed to update print job statuses: {}", e);
-                ErrorInternalServerError(e.to_string())
-            })?;
-            
+    // TODO add print job to job queue
+    add_to_job_queue(&job_queue, Job::Print(print_job))
+        .await
+        .map_err(|e| {
             let _ = std::fs::remove_file(&file_path);
-            json_error(format!("Failed to submit print job: {}", e))
-        }
-    }
+            ErrorInternalServerError(e.to_string())
+        })?;
+
+    tokio::spawn(async move {
+        if let Err(e) = notify_scan_queue(&job_queue, &pool).await {
+            let _ = std::fs::remove_file(&file_path);
+            log::error!("Failed to notify scan queue: {}", e);
+        };
+    });
+
+    json_success(serde_json::json!({
+        "job_id": job_id,
+        "status": "queued",
+        "printer": printer
+    }))
 }
 
 /// GET /api/print/jobs - List all print jobs
@@ -238,19 +227,19 @@ pub async fn cancel_print_job(path: web::Path<Uuid>, pool: web::Data<SqlitePool>
             match cups_service.cancel_job(&job.printer, cups_job_id).await {
                 Ok(_) => {
                     job.set_status(PrintJobStatus::Cancelled);
-                    job.update_statuses_in_db(pool).await.map_err(|e| {ErrorInternalServerError(e.to_string())})?;
+                    job.update_in_db(pool).await.map_err(|e| {ErrorInternalServerError(e.to_string())})?;
                     json_success(serde_json::json!({"message": "Print job cancelled"}))
                 },
                 Err(e) => {
                     log::warn!("Failed to cancel CUPS job {}: {}", cups_job_id, e);
                     job.set_status(PrintJobStatus::Cancelled);
-                    job.update_statuses_in_db(pool).await.map_err(|e| {ErrorInternalServerError(e.to_string())})?;
+                    job.update_in_db(pool).await.map_err(|e| {ErrorInternalServerError(e.to_string())})?;
                     json_success(serde_json::json!({"message": "Print job marked as cancelled"}))
                 }
             }
         } else {
             job.set_status(PrintJobStatus::Cancelled);
-            job.update_statuses_in_db(pool).await.map_err(|e| {ErrorInternalServerError(e.to_string())})?;
+            job.update_in_db(pool).await.map_err(|e| {ErrorInternalServerError(e.to_string())})?;
             json_success(serde_json::json!({"message": "Print job cancelled"}))
         }
     } else {
@@ -274,58 +263,3 @@ pub async fn delete_print_job_record(path: web::Path<Uuid>, pool: web::Data<Sqli
     }
 }
 
-/// Background task to monitor print job status
-async fn monitor_print_job(job_id: Uuid, cups_job_id: i32, pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    let cups_service = CupsService::new();
-    let mut last_status = String::new();
-
-    // Monitor for up to 5 minutes
-    for _ in 0..60 {
-        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-
-        match cups_service.get_job_status(cups_job_id).await {
-            Ok(status) => {
-                if status != last_status {
-                    last_status = status.clone();
-
-                    if let Some(mut job) = PrintJob::find_by_uuid(job_id, pool).await? {
-                        let new_status = match status.as_str() {
-                            "queued" | "pending" => PrintJobStatus::Queued,
-                            "printing" => PrintJobStatus::Printing,
-                            "completed" => PrintJobStatus::Completed,
-                            "stopped" | "aborted" => PrintJobStatus::Failed,
-                            "cancelled" => PrintJobStatus::Cancelled,
-                            "idle" => PrintJobStatus::Completed,
-                            _ => PrintJobStatus::Processing,
-                        };
-
-                        job.set_status(new_status.clone());
-                        job.update_statuses_in_db(pool).await?;
-
-                        // If job is finished, stop monitoring
-                        match new_status {
-                            PrintJobStatus::Completed |
-                            PrintJobStatus::Failed |
-                            PrintJobStatus::Cancelled => {
-                                // Clean up uploaded file after a delay
-                                let filename = job.filename.clone();
-                                tokio::spawn(async move {
-                                    tokio::time::sleep(tokio::time::Duration::from_secs(300)).await;
-                                    let _ = std::fs::remove_file(format!("uploads/{}", filename));
-                                });
-                                break;
-                            },
-                            _ => {}
-                        }
-                    }
-                }
-            },
-            Err(e) => {
-                log::error!("Failed to get job status for {}: {}", cups_job_id, e);
-                break;
-            }
-        }
-    }
-
-    Ok(())
-}

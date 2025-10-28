@@ -1,7 +1,7 @@
 use actix_files::Files;
 use actix_web::{web, App, HttpServer, middleware::Logger};
 use std::io;
-use tokio::time::Instant;
+use std::sync::Arc;
 
 mod handlers;
 mod services;
@@ -11,7 +11,7 @@ mod database;
 
 use handlers::{print, scan, system};
 use crate::database::init_database;
-use crate::models::{AppState, ScanJobQueue};
+use crate::models::{AppState, JobQueue};
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
@@ -31,7 +31,11 @@ async fn main() -> io::Result<()> {
     
     log::info!("Creating app state");
     let app_state = AppState::new().await;
-    
+
+    log::info!("Found devices:\n{}", app_state.show_devices().await);
+
+    let job_queue = JobQueue::new();
+
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
@@ -75,7 +79,7 @@ async fn main() -> io::Result<()> {
             .app_data(web::PayloadConfig::new(50 * 1024 * 1024)) // 50MB max
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(app_state.clone()))
-            .app_data(web::Data::new(ScanJobQueue::new()))
+            .app_data(web::Data::new(job_queue.clone()))
     })
         .bind("0.0.0.0:8080")?
         .run()

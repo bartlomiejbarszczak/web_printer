@@ -213,6 +213,10 @@ impl PrintJob {
         self.error_message = Some(error);
         self.set_status(PrintJobStatus::Failed);
     }
+    
+    pub fn set_cups_job_id(&mut self, cups_job_id: i32) {
+        self.cups_job_id = Some(cups_job_id);
+    }
 
     pub fn get_file_path(&self) -> Option<String> {
         Some(format!("uploads/{}", self.filename))
@@ -258,14 +262,15 @@ impl PrintJob {
     }
 
 
-    pub async fn update_statuses_in_db(&self, pool: &SqlitePool) -> Result<u64, sqlx::Error> {
+    pub async fn update_in_db(&self, pool: &SqlitePool) -> Result<u64, sqlx::Error> {
         let status_str = self.status.to_string();
 
         let query = query_bind!(
             r#"
             UPDATE print_jobs
-            SET status = ?, started_at = ?, completed_at = ?, error_message = ? WHERE job_uuid = ?;
+            SET cups_id_job = ?,status = ?, started_at = ?, completed_at = ?, error_message = ? WHERE job_uuid = ?;
             "#,
+            self.cups_job_id,
             status_str,
             self.started_at,
             self.completed_at,
