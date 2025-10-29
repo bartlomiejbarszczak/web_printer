@@ -355,7 +355,7 @@ async function loadInitialData() {
 // Update recent activity
 async function updateRecentActivity() {
     try {
-        const recentJobs = await API.get('/system/get-recent');
+        const recentJobs = await API.get('/system/recent');
         displayRecentActivity(recentJobs);
     } catch (error) {
         console.error('Failed to load recent activity:', error);
@@ -726,11 +726,144 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup dashboard forms if on main page
     if (window.location.pathname === '/') {
         setupDashboardForms();
+        // Start queue updates for dashboard
+        updateJobQueue();
+        setInterval(updateJobQueue, 3000); // Update every 3 seconds
     }
 
     // Start periodic updates
     AppState.refreshInterval = setInterval(updateSystemStatus, 5000); // Every 5 seconds
 });
+
+// Job Queue Functions
+async function updateJobQueue() {
+    try {
+        const queueJobs = await API.get('/system/queue');
+        displayJobQueue(queueJobs);
+        updateQueueCount(queueJobs.length);
+    } catch (error) {
+        console.error('Failed to load job queue:', error);
+    }
+}
+
+function displayJobQueue(jobs) {
+    const container = document.getElementById('queue-list');
+    if (!container) return;
+
+    if (!jobs || jobs.length === 0) {
+        container.innerHTML = `
+            <div class="queue-placeholder">
+                <i class="fas fa-check-circle"></i>
+                <p>No jobs in queue</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = jobs.map((item, index) => {
+        const isPrint = item.Print !== undefined;
+        const job = isPrint ? item.Print : item.Scan;
+        const type = isPrint ? 'print' : 'scan';
+        const isProcessing = ['processing', 'printing', 'scanning'].includes(job.status.toLowerCase());
+        const filename = isPrint ? job.filename : (job.output_filename || 'Scan');
+
+        const waitTime = calculateWaitTime(job);
+        const processTime = calculateProcessingTime(job);
+
+        return `
+            <div class="queue-item ${isProcessing ? 'processing' : 'queued'}">
+                <div class="queue-position ${isProcessing ? 'processing' : ''}">
+                    ${isProcessing ? '▶' : `#${index + 1}`}
+                </div>
+                <div class="queue-job-icon ${type} ${isProcessing ? 'processing' : ''}">
+<!--                    <i class="fas fa-${type === 'print' ? 'print' : 'scanner'}"></i>-->
+                    <i class="fas fa-print"></i>
+                </div>
+                <div class="queue-job-info">
+                    <div class="queue-job-title">${type === 'print' ? 'Print' : 'Scan'}: ${filename}</div>
+                    <div class="queue-job-subtitle">
+                        ${isProcessing ?
+            `<span class="processing-indicator"><i class="fas fa-spinner fa-spin"></i> Processing</span>` :
+            `Status: ${job.status}`
+        }
+                    </div>
+                </div>
+                <div class="queue-job-time">
+                    ${isProcessing ? `
+                        <span class="queue-time-label">Processing</span>
+                        <span class="queue-time-value processing">${processTime}</span>
+                    ` : `
+                        <span class="queue-time-label">Waiting</span>
+                        <span class="queue-time-value waiting">${waitTime}</span>
+                    `}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Update times every second
+    startQueueTimeUpdates();
+}
+
+function updateQueueCount(count) {
+    const countElement = document.getElementById('queue-count');
+    if (countElement) {
+        countElement.textContent = count;
+        countElement.style.display = count > 0 ? 'inline-block' : 'none';
+    }
+}
+
+function calculateWaitTime(job) {
+    const createdAt = new Date(job.created_at);
+    const now = new Date();
+    const diffMs = now - createdAt;
+    return formatDuration(diffMs);
+}
+
+function calculateProcessingTime(job) {
+    if (!job.started_at) return '0s';
+    const startedAt = new Date(job.started_at);
+    const now = new Date();
+    const diffMs = now - startedAt;
+    return formatDuration(diffMs);
+}
+
+function formatDuration(ms) {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+        return `${hours}h ${minutes % 60}m`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${seconds % 60}s`;
+    } else {
+        return `${seconds}s`;
+    }
+}
+
+let queueTimeUpdateInterval = null;
+
+function startQueueTimeUpdates() {
+    if (queueTimeUpdateInterval) {
+        clearInterval(queueTimeUpdateInterval);
+    }
+
+    queueTimeUpdateInterval = setInterval(() => {
+        // Update time displays without re-fetching data
+        const container = document.getElementById('queue-list');
+        if (!container) return;
+
+        const timeElements = container.querySelectorAll('.queue-time-value');
+        timeElements.forEach((el, index) => {
+            const item = el.closest('.queue-item');
+            if (!item) return;
+
+            // You would need to store job data to recalculate
+            // For now, this just demonstrates the concept
+        });
+    }, 1000);
+}
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {

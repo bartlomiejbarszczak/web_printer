@@ -1,7 +1,6 @@
 use actix_files::Files;
 use actix_web::{web, App, HttpServer, middleware::Logger};
 use std::io;
-use std::sync::Arc;
 
 mod handlers;
 mod services;
@@ -65,7 +64,8 @@ async fn main() -> io::Result<()> {
                     .route("/system/settings", web::post().to(system::update_settings))
                     .route("/system/nozzle/check", web::post().to(system::nozzle_check))
                     .route("/system/nozzle/clean", web::post().to(system::nozzle_clean))
-                    .route("/system/get-recent", web::get().to(system::get_recent_activity))
+                    .route("/system/recent", web::get().to(system::get_recent_activity))
+                    .route("/system/queue", web::get().to(system::get_current_queue))
             )
             // Web pages
             .route("/", web::get().to(system::index))

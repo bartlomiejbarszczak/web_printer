@@ -14,7 +14,6 @@ use std::sync::{Arc};
 use sqlx::SqlitePool;
 use tokio::sync::{RwLock};
 use tokio::time::Instant;
-use uuid::Uuid;
 use crate::services::cups::CupsService;
 use crate::services::sane::SaneService;
 
@@ -129,7 +128,7 @@ impl AppState {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Job {
     Scan(ScanJob),
     Print(PrintJob),

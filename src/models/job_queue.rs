@@ -52,6 +52,13 @@ impl JobQueue {
         *self.processing.lock().await = value;
         log::warn!("JobQueue is set to: {}", value);
     }
+
+    pub async fn get_current_queue(&self) -> Vec<Job> {
+        self.queue.lock().await
+            .iter()
+            .map(|j| j.clone())
+            .collect()
+    }
 }
 
 pub async fn add_to_job_queue(job_queue: &JobQueue, job: Job) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -79,10 +86,9 @@ pub async fn notify_scan_queue(job_queue: &JobQueue, pool: &SqlitePool) -> Resul
 }
 
 async fn handle_job(job_queue: &JobQueue, pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    if job_queue.is_processing().await {
-        return Ok(());
-    }
-
+    // if job_queue.is_processing().await {
+    //     return Ok(());
+    // }
     if let Some(mut job) = job_queue.pop().await? {
         log::warn!("Processing job: {}", job);
         job_queue.set_processing(true).await;

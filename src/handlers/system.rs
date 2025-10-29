@@ -7,7 +7,7 @@ use tokio::process::Command;
 use tokio::time::{Instant, Duration};
 
 use crate::handlers::{json_success, internal_error, json_error};
-use crate::models::{AppState, PrintJob, ScanJob, SystemStatus, Job};
+use crate::models::{AppState, PrintJob, ScanJob, SystemStatus, Job, JobQueue};
 use crate::services::cups::CupsService;
 use crate::services::sane::SaneService;
 use crate::services::escputil::MaintenanceService;
@@ -82,7 +82,7 @@ pub async fn update_settings() -> Result<HttpResponse> {
 }
 
 
-/// GET /api/system/get-recent - Get recent 5 jobs
+/// GET /api/system/recent - Get recent 5 jobs
 pub async fn get_recent_activity(pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
     let limit = 5;
 
@@ -139,6 +139,15 @@ pub async fn nozzle_clean() -> Result<HttpResponse> {
         Ok(_) => json_success("true"),
         Err(e) => json_error(e),
     }
+}
+
+
+/// GET /api/system/queue
+pub async fn get_current_queue(job_queue: web::Data<JobQueue>) -> Result<HttpResponse> {
+    let jq = job_queue.get_ref();
+    let data = jq.get_current_queue().await;
+    
+    json_success(data)
 }
 
 /// Helper function to get available disk space
