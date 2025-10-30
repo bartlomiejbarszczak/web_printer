@@ -563,11 +563,6 @@ function setupDashboardForms() {
                 Toast.success('Print job submitted successfully');
                 closePrintDialog();
 
-                // Redirect to print page to see job
-                setTimeout(() => {
-                    window.location.href = '/print';
-                }, 1000);
-
             } catch (error) {
                 Toast.error(error.message);
             }
@@ -600,11 +595,6 @@ function setupDashboardForms() {
                 const result = await API.post('/scan', scanData);
                 Toast.success('Scan job started successfully');
                 closeScanDialog();
-
-                // Redirect to scan page to see job
-                setTimeout(() => {
-                    window.location.href = '/scan';
-                }, 1000);
 
             } catch (error) {
                 Toast.error(error.message);
@@ -773,7 +763,7 @@ function displayJobQueue(jobs) {
         return `
             <div class="queue-item ${isProcessing ? 'processing' : 'queued'}">
                 <div class="queue-position ${isProcessing ? 'processing' : ''}">
-                    ${isProcessing ? '▶' : `#${index + 1}`}
+                    ${isProcessing ? '▶' : `#${index}`}
                 </div>
                 <div class="queue-job-icon ${type} ${isProcessing ? 'processing' : ''}">
 <!--                    <i class="fas fa-${type === 'print' ? 'print' : 'scanner'}"></i>-->

@@ -143,9 +143,9 @@ pub async fn nozzle_clean() -> Result<HttpResponse> {
 
 
 /// GET /api/system/queue
-pub async fn get_current_queue(job_queue: web::Data<JobQueue>) -> Result<HttpResponse> {
+pub async fn get_current_queue(job_queue: web::Data<JobQueue>, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
     let jq = job_queue.get_ref();
-    let data = jq.get_current_queue().await;
+    let data = jq.get_current_queue(&pool).await;
     
     json_success(data)
 }

@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
+
 use crate::models::{Job, PrintJob, PrintJobStatus, ScanJob, ScanJobStatus};
 use crate::services::cups::CupsService;
 use crate::services::sane::SaneService;
@@ -11,6 +12,7 @@ use crate::services::sane::SaneService;
 pub struct JobQueue {
     queue: Arc<Mutex<VecDeque<Job>>>,
     processing: Arc<Mutex<bool>>,
+    processing_job_id: Arc<Mutex<Option<Uuid>>>
 }
 
 impl JobQueue {
@@ -18,6 +20,7 @@ impl JobQueue {
         JobQueue {
             queue: Arc::new(Mutex::new(VecDeque::with_capacity(5))),
             processing: Arc::new(Mutex::new(false)),
+            processing_job_id: Arc::new(Mutex::new(None))
         }
     }
 
@@ -53,11 +56,28 @@ impl JobQueue {
         log::warn!("JobQueue is set to: {}", value);
     }
 
-    pub async fn get_current_queue(&self) -> Vec<Job> {
-        self.queue.lock().await
+    pub async fn get_current_queue(&self, pool: &SqlitePool) -> Vec<Job> {
+        let mut q = self.queue.lock().await
             .iter()
             .map(|j| j.clone())
-            .collect()
+            .collect::<Vec<Job>>();
+
+        if let Some(job_uuid) = self.processing_job_id.lock().await.clone() {
+            match Job::get_job_by_id(job_uuid, pool).await {
+                Err(e) => { log::warn!("Failed to get job: {}", e) },
+                Ok(job_op) => {
+                    if let Some(job) = job_op {
+                        q.insert(0, job);
+                    }
+                }
+            };
+        };
+
+        q
+    }
+
+    async fn set_processing_job_id(&self, value: Option<Uuid>) {
+        *self.processing_job_id.lock().await = value;
     }
 }
 
@@ -86,14 +106,16 @@ pub async fn notify_scan_queue(job_queue: &JobQueue, pool: &SqlitePool) -> Resul
 }
 
 async fn handle_job(job_queue: &JobQueue, pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // if job_queue.is_processing().await {
-    //     return Ok(());
-    // }
     if let Some(mut job) = job_queue.pop().await? {
         log::warn!("Processing job: {}", job);
+        // FIXME wrap me
         job_queue.set_processing(true).await;
+        job_queue.set_processing_job_id(Some(job.id())).await;
+
         job.execute(pool).await;
+
         job_queue.set_processing(false).await;
+        job_queue.set_processing_job_id(None).await;
     }
 
     if let Err(e) = Box::pin(notify_scan_queue(job_queue, pool)).await {

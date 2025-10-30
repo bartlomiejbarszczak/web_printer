@@ -14,6 +14,7 @@ use std::sync::{Arc};
 use sqlx::SqlitePool;
 use tokio::sync::{RwLock};
 use tokio::time::Instant;
+use uuid::Uuid;
 use crate::services::cups::CupsService;
 use crate::services::sane::SaneService;
 
@@ -157,6 +158,13 @@ impl Job {
         }
     }
 
+    pub fn id(&self) -> Uuid {
+        match self {
+            Job::Scan(sj) => sj.id.clone(),
+            Job::Print(pj) => pj.id.clone(),
+        }
+    }
+
     pub async fn execute(&mut self, pool: &SqlitePool) {
         match self {
             Job::Scan(sj) => {
@@ -170,6 +178,17 @@ impl Job {
                 };
             }
         }
+    }
+
+    pub async fn get_job_by_id(uuid: Uuid, pool: &SqlitePool) -> Result<Option<Job>, sqlx::Error> {
+        if let Some(sj) = ScanJob::find_by_uuid(uuid, pool).await? {
+            return Ok(Some(Job::Scan(sj)))
+        };
+        if let Some(pj) = PrintJob::find_by_uuid(uuid, pool).await? {
+           return Ok(Some(Job::Print(pj)))
+        };
+
+        Ok(None)
     }
 }
 
