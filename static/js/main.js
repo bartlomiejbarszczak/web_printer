@@ -726,7 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeSSE();
 
     // Start periodic updates
-    AppState.refreshInterval = setInterval(updateSystemStatus, 5000); // Every 5 seconds
+    // AppState.refreshInterval = setInterval(updateSystemStatus, 5000); // Every 5 seconds
 });
 
 // Job Queue Functions
@@ -885,7 +885,7 @@ function initializeSSE() {
         eventSource.close();
     }
 
-    eventSource = new EventSource("/api/sse/queue");
+    eventSource = new EventSource("/api/events/stream");
 
     eventSource.addEventListener('open', () => {
         console.log("SSE connection established");
@@ -910,9 +910,29 @@ function initializeSSE() {
     });
 }
 
-function handleSSEMessage(data) {
-    if (window.location.pathname === '/') {
-        displayJobQueue(data);
+async function handleSSEMessage(data) {
+    await updateRecentActivity();
+
+    switch (data.type) {
+        case 'queue_update':
+            if (window.location.pathname === '/') {
+                displayJobQueue(data.queue);
+            }
+            break;
+
+        case 'status_update':
+            if (data.status.active_prints !== undefined) {
+                const el = document.getElementById('active-prints');
+                if (el) el.textContent = data.status.active_prints;
+            }
+            if (data.status.active_scans !== undefined) {
+                const el = document.getElementById('active-scans');
+                if (el) el.textContent = data.status.active_scans;
+            }
+            break;
+
+        default:
+            console.log('Unknown SSE message type:', data.type);
     }
 }
 

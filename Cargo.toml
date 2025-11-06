@@ -8,18 +8,22 @@ edition = "2024"
 actix-web = "4.11"
 actix-files = {version = "0.6.6", features = ["experimental-io-uring"]}
 actix-multipart = "0.7.2"
+actix-web-lab = {version = "0.24.3", features = ["default"]}
+async-stream = "0.3.6"
 tokio = { version = "1.47.1", features = ["full"] }
+tokio-stream = { version = "0.1.17", features = ["full"] }
+futures = {version = "0.3.31", features = ["default"]}
+futures-util = "0.3.31"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.142"
 uuid = { version = "1.17.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-#tera = "1.20.0"
 env_logger = "0.11.8"
 log = "0.4.27"
-config = "0.15.13"
-futures-util = "0.3.31"
-mime = "0.3.17"
-tempfile = "3.20.0"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "uuid", "macros"] }
 bytes = "1.10.1"
-tokio-stream = { version = "0.1.17", features = ["full"] }
+config = "0.15.13"
+
+
+#mime = "0.3.17"
+#tempfile = "3.20.0"

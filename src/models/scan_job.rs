@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use sqlx::{Row, SqlitePool};
@@ -78,6 +79,21 @@ pub struct ScanRequest {
     pub brightness: Option<i32>,
     pub contrast: Option<i32>,
     pub filename: Option<String>,
+}
+
+impl Display for ScanJobStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let status_str = match self {
+            ScanJobStatus::Queued => { "queued" }
+            ScanJobStatus::Scanning => { "scanning" }
+            ScanJobStatus::Processing => { "processing" }
+            ScanJobStatus::Completed => { "completed" }
+            ScanJobStatus::Failed => { "failed" }
+            ScanJobStatus::Cancelled => { "cancelled" }
+        };
+
+        f.write_str(status_str)
+    }
 }
 
 
@@ -380,25 +396,24 @@ impl ScanJob {
         Ok(scan_jobs?)
     }
 
-    pub async fn get_by_status(status: ScanJobStatus, pool: &SqlitePool) -> Result<Vec<ScanJob>, sqlx::Error> {
-        let status_str = match status {
-            ScanJobStatus::Queued => { "queued" }
-            ScanJobStatus::Scanning => { "scanning" }
-            ScanJobStatus::Processing => { "processing" }
-            ScanJobStatus::Completed => { "completed" }
-            ScanJobStatus::Failed => { "failed" }
-            ScanJobStatus::Cancelled => { "cancelled" }
-        };
-    
-        let rows = query_bind!(r#"
-            SELECT * FROM scan_jobs
-            WHERE status = ?
-            ORDER BY created_at ASC;
-        "#,
-        status_str).fetch_all(pool).await?;
-    
-        let scan_jobs = rows.iter().map(ScanJob::try_from).collect::<Result<Vec<ScanJob>, sqlx::Error>>();
-    
+    pub async fn find_by_statuses(statuses: Vec<ScanJobStatus>, pool: &SqlitePool) -> Result<Vec<ScanJob>, sqlx::Error> {
+        let placeholders = statuses.iter().map(|_| {"?"}).collect::<Vec<_>>().join(",");
+        let statuses = statuses.iter().map(|s| {s.to_string()}).collect::<Vec<String>>();
+
+        let query_str = format!(
+            "SELECT * FROM scan_jobs WHERE status IN ({}) ORDER BY created_at ASC;",
+            placeholders
+        );
+
+        let mut query = sqlx::query(&query_str);
+        for status in statuses {
+            query = query.bind(status);
+        }
+
+        let rows = query.fetch_all(pool).await?;
+        let scan_jobs = rows.iter()
+            .map(|x| {ScanJob::try_from(x)}).collect::<Result<Vec<ScanJob>, sqlx::Error>>();
+
         Ok(scan_jobs?)
     }
     

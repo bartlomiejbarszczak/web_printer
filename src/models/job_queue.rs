@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
-
+use crate::handlers::events::EventState;
 use crate::models::{Job, PrintJob, PrintJobStatus, ScanJob, ScanJobStatus};
 use crate::services::cups::CupsService;
 use crate::services::sane::SaneService;
@@ -13,7 +13,6 @@ pub struct JobQueue {
     queue: Arc<Mutex<VecDeque<Job>>>,
     processing: Arc<Mutex<bool>>,
     processing_job_id: Arc<Mutex<Option<Uuid>>>,
-    is_changed: Arc<Mutex<bool>>,
 }
 
 impl JobQueue {
@@ -22,20 +21,17 @@ impl JobQueue {
             queue: Arc::new(Mutex::new(VecDeque::with_capacity(5))),
             processing: Arc::new(Mutex::new(false)),
             processing_job_id: Arc::new(Mutex::new(None)),
-            is_changed: Arc::new(Mutex::new(false)),
         }
     }
 
     async fn push(&self, job: Job) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut queue = self.queue.lock().await;
         queue.push_back(job);
-        *self.is_changed.lock().await = true;
         Ok(())
     }
 
     async fn pop(&self) -> Result<Option<Job>, Box<dyn std::error::Error + Send + Sync>> {
         let mut queue = self.queue.lock().await;
-        *self.is_changed.lock().await = true;
         Ok(queue.pop_front())
     }
 
@@ -77,19 +73,9 @@ impl JobQueue {
 
         q
     }
-    
-    pub async fn is_changed(&self) -> bool {
-        if *self.is_changed.lock().await {
-            *self.is_changed.lock().await = false;
-            return true;
-        }
-
-        false
-    }
 
     async fn set_processing_job_id(&self, value: Option<Uuid>) {
         *self.processing_job_id.lock().await = value;
-        *self.is_changed.lock().await = true;
     }
 }
 
@@ -98,7 +84,7 @@ pub async fn add_to_job_queue(job_queue: &JobQueue, job: Job) -> Result<(), Box<
     job_queue.push(job).await
 }
 
-pub async fn notify_scan_queue(job_queue: &JobQueue, pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn notify_scan_queue(job_queue: &JobQueue, pool: &SqlitePool, event_state: &EventState) -> Result<(), Box<dyn std::error::Error>> {
     if job_queue.is_empty().await {
         return Ok(());
     }
@@ -110,30 +96,30 @@ pub async fn notify_scan_queue(job_queue: &JobQueue, pool: &SqlitePool) -> Resul
     let queue_len = job_queue.len().await;
     log::info!("Requests in queue: {}", queue_len);
 
-    if let Err(e) = handle_job(job_queue, pool).await {
+    if let Err(e) = handle_job(job_queue, pool, event_state).await {
         log::error!("Failed to handle next job in queue: {}", e);
     }
 
     Ok(())
 }
 
-async fn handle_job(job_queue: &JobQueue, pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn handle_job(job_queue: &JobQueue, pool: &SqlitePool, event_state: &EventState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if let Some(mut job) = job_queue.pop().await? {
         log::warn!("Processing job: {}", job);
         // FIXME wrap me
         job_queue.set_processing(true).await;
         job_queue.set_processing_job_id(Some(job.id())).await;
+        event_state.increment_status_version().await;
 
         job.execute(pool).await;
 
-        // while !job.is_finished() {
-        // }
-
         job_queue.set_processing(false).await;
         job_queue.set_processing_job_id(None).await;
+        event_state.increment_queue_version().await;
+        event_state.increment_status_version().await;
     }
 
-    if let Err(e) = Box::pin(notify_scan_queue(job_queue, pool)).await {
+    if let Err(e) = Box::pin(notify_scan_queue(job_queue, pool, event_state)).await {
         log::error!("Failed to notify scan queue: {}", e);
     }
 

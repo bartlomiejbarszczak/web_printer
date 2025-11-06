@@ -1,7 +1,6 @@
 use actix_files::Files;
 use actix_web::{web, App, HttpServer, middleware::Logger};
 use std::io;
-use tokio::sync::broadcast;
 
 
 mod handlers;
@@ -10,9 +9,9 @@ mod models;
 mod utils;
 mod database;
 
-use handlers::{print, scan, system};
+use handlers::{print, scan, system, events};
 use crate::database::init_database;
-use crate::models::{AppState, JobQueue, Job};
+use crate::models::{AppState, JobQueue};
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
@@ -36,26 +35,8 @@ async fn main() -> io::Result<()> {
     log::info!("Found devices:\n{}", app_state.show_devices().await);
 
     let job_queue = JobQueue::new();
-    let (queue_tx, _) = broadcast::channel::<Vec<Job>>(128);
+    let event_state = events::EventState::new();
 
-    // Queue SSE Loop
-    let jq_clone = job_queue.clone();
-    let pool_clone = pool.clone();
-    let tx_clone = queue_tx.clone();
-    
-    tokio::task::spawn(async move {
-        loop {
-            if jq_clone.is_changed().await {
-                log::info!("Job queue changed");
-                let msg = jq_clone.get_current_queue(&pool_clone).await;
-
-                if let Err(e) = tx_clone.send(msg) {
-                    log::error!("Error sending job queue: {}", e);
-                }
-            }
-        }
-    });
-    
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
@@ -76,7 +57,6 @@ async fn main() -> io::Result<()> {
                     .route("/scan/jobs", web::get().to(scan::list_scan_jobs))
                     .route("/scan/jobs/{job_id}", web::get().to(scan::get_scan_job))
                     .route("/scan/jobs/{job_id}", web::delete().to(scan::delete_scan_job_record))
-                    .route("/scan/remove/{job_id}", web::delete().to(scan::delete_scan_file))
                     .route("/scan/download/{job_id}", web::get().to(scan::download_scan))
 
                     // System endpoints
@@ -88,8 +68,8 @@ async fn main() -> io::Result<()> {
                     .route("/system/recent", web::get().to(system::get_recent_activity))
                     .route("/system/queue", web::get().to(system::get_current_queue))
 
-                    // SSE endpoints
-                    .route("/sse/queue", web::get().to(system::sse_queue))
+                    // SSE endpoint
+                    .route("/events/stream", web::get().to(events::event_stream))
 
             )
             // Web pages
@@ -105,7 +85,7 @@ async fn main() -> io::Result<()> {
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(app_state.clone()))
             .app_data(web::Data::new(job_queue.clone()))
-            .app_data(web::Data::new(queue_tx.clone()))
+            .app_data(web::Data::new(event_state.clone()))
     })
         .bind("0.0.0.0:8080")?
         .workers(4)

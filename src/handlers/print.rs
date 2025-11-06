@@ -6,6 +6,7 @@ use uuid::Uuid;
 use actix_web::error::{ErrorBadRequest, ErrorInternalServerError};
 use sqlx::SqlitePool;
 use crate::handlers::{json_success, json_error, internal_error};
+use crate::handlers::events::EventState;
 use crate::models::{PrintJob, PrintRequest, PrintJobStatus, PrintPageSize, AppState, add_to_job_queue, Job, notify_scan_queue, JobQueue};
 use crate::services::cups::CupsService;
 
@@ -19,7 +20,13 @@ pub async fn list_printers(app_state: web::Data<AppState>) -> Result<HttpRespons
 }
 
 /// POST /api/print - Submit a print job
-pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool>, job_queue: web::Data<JobQueue>, app_state: web::Data<AppState>) -> Result<HttpResponse> {
+pub async fn submit_print_job(
+    mut payload: Multipart, 
+    pool: web::Data<SqlitePool>, 
+    job_queue: web::Data<JobQueue>, 
+    app_state: web::Data<AppState>,
+    event_state: web::Data<EventState>
+) -> Result<HttpResponse> {
     let cups_service = CupsService::new();
 
     if !cups_service.is_available().await {
@@ -176,13 +183,16 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
             let _ = std::fs::remove_file(&file_path);
             ErrorInternalServerError(e.to_string())
         })?;
-
+    
+    let event_state_clone = event_state.clone();
     tokio::spawn(async move {
-        if let Err(e) = notify_scan_queue(&job_queue, &pool).await {
+        if let Err(e) = notify_scan_queue(&job_queue, &pool, &event_state_clone).await {
             let _ = std::fs::remove_file(&file_path);
             log::error!("Failed to notify scan queue: {}", e);
         };
     });
+    
+    event_state.increment_queue_version().await;
 
     json_success(serde_json::json!({
         "job_id": job_id,

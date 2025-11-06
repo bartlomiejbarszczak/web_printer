@@ -4,6 +4,7 @@ use sqlx::{SqlitePool};
 use uuid::Uuid;
 
 use crate::handlers::{json_success, json_error, internal_error};
+use crate::handlers::events::EventState;
 use crate::models::{ScanJob, ScanRequest, ScanJobStatus, JobQueue, add_to_job_queue, notify_scan_queue, AppState, Job};
 use crate::services::sane::SaneService;
 
@@ -16,7 +17,13 @@ pub async fn list_scanners(app_state: web::Data<AppState>) -> Result<HttpRespons
 }
 
 /// POST /api/scan - Start a scan job
-pub async fn start_scan(req: web::Json<ScanRequest>, pool: web::Data<SqlitePool>, job_queue: web::Data<JobQueue>, app_state: web::Data<AppState>) -> Result<HttpResponse> {
+pub async fn start_scan(
+    req: web::Json<ScanRequest>,
+    pool: web::Data<SqlitePool>,
+    job_queue: web::Data<JobQueue>,
+    app_state: web::Data<AppState>,
+    event_state: web::Data<EventState>
+) -> Result<HttpResponse> {
     let sane_service = SaneService::new();
 
     if !sane_service.is_available().await {
@@ -53,11 +60,14 @@ pub async fn start_scan(req: web::Json<ScanRequest>, pool: web::Data<SqlitePool>
         .await
         .map_err(|e| ErrorInternalServerError(e.to_string()))?;
 
+    let event_state_clone = event_state.clone();
     tokio::spawn(async move {
-        if let Err(e) = notify_scan_queue(&job_queue, &pool).await {
+        if let Err(e) = notify_scan_queue(&job_queue, &pool, &event_state_clone).await {
             log::error!("Failed to notify scan queue: {}", e);
         };
     });
+
+    event_state.increment_queue_version().await;
 
     json_success(serde_json::json!({
         "job_id": job_id,
@@ -89,33 +99,35 @@ pub async fn get_scan_job(path: web::Path<Uuid>, pool: web::Data<SqlitePool>) ->
 pub async fn delete_scan_job_record(path: web::Path<Uuid>, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
     let job_id = path.into_inner();
 
-    match ScanJob::remove_by_uuid(job_id, pool.as_ref()).await {
-        Ok(_) => json_success(format!("Successfully removed job {}", job_id)),
-        Err(e) => internal_error(format!("Failed to find job: {}", e)),
-    }
-}
-
-/// DELETE /api/scan/remove/{job_id} - Delete specific scan file
-pub async fn delete_scan_file(path: web::Path<Uuid>, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
-    let job_id = path.into_inner();
-
-    if let Some(scan_job) = ScanJob::find_by_uuid(job_id, pool.as_ref())
+    match ScanJob::find_by_uuid(job_id, pool.as_ref())
         .await
         .map_err(|e| ErrorInternalServerError(e.to_string()))? {
+        Some(scan_job) => {
+            let filename = match scan_job.output_filename {
+                Some(filename) => filename,
+                None => return Err(ErrorInternalServerError("Validation error".to_string())),
+            };
+            delete_scan(filename.clone(), &pool)
+                .await
+                .map_err(|e| ErrorInternalServerError(e.to_string()))?;
 
-        let filename = match scan_job.output_filename {
-            Some(filename) => filename,
-            None => return Err(ErrorInternalServerError("Validation error".to_string())),
-        };
+            log::info!("Successfully delete scan file {}", filename);
+        }
+        None => {
+            log::warn!("Could not find scan job: {}", job_id)
+        }
+    }
 
-        delete_scan(filename.clone(), &pool)
-            .await
-            .map_err(|e| ErrorInternalServerError(e.to_string()))?;
-
-        return json_success(format!("Successfully removed scan {}", filename));
-    };
-
-    internal_error(format!("Could not find scan job {job_id}"))
+    match ScanJob::remove_by_uuid(job_id, pool.as_ref()).await {
+        Ok(_) => {
+            log::info!("Scan job {} deleted successfully", job_id);
+            json_success(format!("Successfully removed job {}", job_id))
+        },
+        Err(e) => {
+            log::error!("Failed to remove job {}: {}", job_id, e);
+            internal_error(format!("Failed to find job: {}", e))
+        },
+    }
 }
 
 /// GET /api/scan/download/{job_id} - Download scanned file
@@ -145,9 +157,6 @@ pub async fn download_scan(path: web::Path<Uuid>, req: HttpRequest, pool: web::D
         None => json_error("Scan job not found".to_string()),
     }
 }
-
-
-
 
 async fn delete_scan(filename: String, pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
     match std::fs::remove_file(format!("scans/{}", filename)) {

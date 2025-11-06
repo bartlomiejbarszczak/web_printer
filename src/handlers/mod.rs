@@ -1,6 +1,7 @@
 pub mod print;
 pub mod scan;
 pub mod system;
+pub mod events;
 
 use actix_web::{HttpResponse, Result};
 use crate::models::ApiResponse;

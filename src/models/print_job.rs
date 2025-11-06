@@ -309,18 +309,24 @@ impl PrintJob {
         }
     }
 
-    pub async fn find_by_status(status: PrintJobStatus, pool: &SqlitePool) -> Result<Vec<PrintJob>, sqlx::Error> {
-        let rows = query_bind!(
-            r#"
-            SELECT * FROM print_jobs WHERE status = ?
-            ORDER BY created_at ASC;
-            "#,
-            status.to_string()
-        ).fetch_all(pool).await?;
-    
+    pub async fn find_by_statuses(statuses: Vec<PrintJobStatus>, pool: &SqlitePool) -> Result<Vec<PrintJob>, sqlx::Error> {
+        let placeholders = statuses.iter().map(|_| {"?"}).collect::<Vec<_>>().join(",");
+        let statuses = statuses.iter().map(|s| {s.to_string()}).collect::<Vec<String>>();
+
+        let query_str = format!(
+            "SELECT * FROM print_jobs WHERE status IN ({}) ORDER BY created_at ASC;",
+            placeholders
+        );
+
+        let mut query = sqlx::query(&query_str);
+        for status in statuses {
+            query = query.bind(status);
+        }
+
+        let rows = query.fetch_all(pool).await?;
         let print_jobs = rows.iter()
             .map(|x| {PrintJob::try_from(x)}).collect::<Result<Vec<PrintJob>, sqlx::Error>>();
-    
+        
         Ok(print_jobs?)
     }
 

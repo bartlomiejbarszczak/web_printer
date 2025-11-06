@@ -96,13 +96,13 @@ impl AppState {
         }
     }
 
-    pub async fn add_scanner(&mut self, scanner: Scanner) {
-        self.scanners.write().await.push(scanner);
-    }
-
-    pub async fn add_printer(&mut self, printer: Printer) {
-        self.printers.write().await.push(printer);
-    }
+    // pub async fn add_scanner(&mut self, scanner: Scanner) {
+    //     self.scanners.write().await.push(scanner);
+    // }
+    //
+    // pub async fn add_printer(&mut self, printer: Printer) {
+    //     self.printers.write().await.push(printer);
+    // }
 
     pub async fn get_scanners(&self) -> Vec<Scanner> { 
         self.scanners.read().await.clone()
