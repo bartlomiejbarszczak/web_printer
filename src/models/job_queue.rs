@@ -12,7 +12,8 @@ use crate::services::sane::SaneService;
 pub struct JobQueue {
     queue: Arc<Mutex<VecDeque<Job>>>,
     processing: Arc<Mutex<bool>>,
-    processing_job_id: Arc<Mutex<Option<Uuid>>>
+    processing_job_id: Arc<Mutex<Option<Uuid>>>,
+    is_changed: Arc<Mutex<bool>>,
 }
 
 impl JobQueue {
@@ -20,18 +21,21 @@ impl JobQueue {
         JobQueue {
             queue: Arc::new(Mutex::new(VecDeque::with_capacity(5))),
             processing: Arc::new(Mutex::new(false)),
-            processing_job_id: Arc::new(Mutex::new(None))
+            processing_job_id: Arc::new(Mutex::new(None)),
+            is_changed: Arc::new(Mutex::new(false)),
         }
     }
 
     async fn push(&self, job: Job) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut queue = self.queue.lock().await;
         queue.push_back(job);
+        *self.is_changed.lock().await = true;
         Ok(())
     }
 
     async fn pop(&self) -> Result<Option<Job>, Box<dyn std::error::Error + Send + Sync>> {
         let mut queue = self.queue.lock().await;
+        *self.is_changed.lock().await = true;
         Ok(queue.pop_front())
     }
 
@@ -47,13 +51,11 @@ impl JobQueue {
 
     async fn is_processing(&self) -> bool {
         let status = *self.processing.lock().await;
-        log::warn!("JobQueue is_processing: {:?}", status);
         status
     }
 
     async fn set_processing(&self, value: bool) {
         *self.processing.lock().await = value;
-        log::warn!("JobQueue is set to: {}", value);
     }
 
     pub async fn get_current_queue(&self, pool: &SqlitePool) -> Vec<Job> {
@@ -75,9 +77,19 @@ impl JobQueue {
 
         q
     }
+    
+    pub async fn is_changed(&self) -> bool {
+        if *self.is_changed.lock().await {
+            *self.is_changed.lock().await = false;
+            return true;
+        }
+
+        false
+    }
 
     async fn set_processing_job_id(&self, value: Option<Uuid>) {
         *self.processing_job_id.lock().await = value;
+        *self.is_changed.lock().await = true;
     }
 }
 
@@ -113,6 +125,9 @@ async fn handle_job(job_queue: &JobQueue, pool: &SqlitePool) -> Result<(), Box<d
         job_queue.set_processing_job_id(Some(job.id())).await;
 
         job.execute(pool).await;
+
+        // while !job.is_finished() {
+        // }
 
         job_queue.set_processing(false).await;
         job_queue.set_processing_job_id(None).await;
@@ -191,14 +206,18 @@ pub async fn execute_print_job(print_job: &mut PrintJob, pool: &SqlitePool) -> R
                 log::error!("Failed to update print job: {}", e);
                 e.to_string()
             })?;
+            //
+            // // Start background job monitoring
+            // tokio::spawn(async move {
+            //     if let Err(e) = monitor_print_job(job_id, cups_job_id, &pool).await {
+            //         log::error!("Monitor print job {} failed: {}", job_id, e);
+            //     };
+            // });
+            if let Err(e) = monitor_print_job(job_id, cups_job_id, &pool).await {
+                log::error!("Monitor print job {} failed: {}", job_id, e);
+            };
 
-            // Start background job monitoring
-            tokio::spawn(async move {
-                if let Err(e) = monitor_print_job(job_id, cups_job_id, &pool).await {
-                    log::error!("Monitor print job {} failed: {}", job_id, e);
-                };
-            });
-
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         },
         Err(e) => {
             print_job.set_error(e.clone());

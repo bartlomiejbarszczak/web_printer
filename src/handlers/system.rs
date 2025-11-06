@@ -1,11 +1,14 @@
 use actix_web::{web, HttpResponse, Result};
 use actix_files::NamedFile;
+use bytes::Bytes;
 use actix_web::error::ErrorInternalServerError;
 use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
 use tokio::process::Command;
 use tokio::time::{Instant, Duration};
-
+use futures_util::StreamExt;
+use tokio::sync::{broadcast,};
+use tokio_stream::wrappers::BroadcastStream;
 use crate::handlers::{json_success, internal_error, json_error};
 use crate::models::{AppState, PrintJob, ScanJob, SystemStatus, Job, JobQueue};
 use crate::services::cups::CupsService;
@@ -28,6 +31,41 @@ pub async fn print_page() -> Result<NamedFile> {
 pub async fn scan_page() -> Result<NamedFile> {
     Ok(NamedFile::open_async("templates/scan.html").await?)
 }
+
+/// GET /api/sse/queue
+pub async fn sse_queue(tx: web::Data<broadcast::Sender<Vec<Job>>>) -> HttpResponse {
+    let rx = tx.subscribe();
+    let client_stream = BroadcastStream::new(rx);
+
+    let stream = client_stream.filter_map(|msg| async {
+        match msg {
+            Ok(queue) => {
+                match serde_json::to_string(&queue) {
+                    Ok(json) => {
+                        let sse_message = format!("data: {}\n\n", json);
+                        Some(Ok::<Bytes, actix_web::Error>(Bytes::from(sse_message)))
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to serialize job queue: {}", e);
+                        None
+                    }
+                }
+            },
+            Err(e) => {
+                log::error!("{}", e.to_string());
+                None
+            },
+        }
+    });
+
+    HttpResponse::Ok()
+        .insert_header(("Content-Type", "text/event-stream"))
+        .insert_header(("Cache-Control", "no-cache"))
+        .insert_header(("Connection", "keep-alive"))
+        .streaming(stream)
+}
+
+
 
 /// GET /api/system/status - Get system status
 pub async fn get_status(app_state: web::Data<AppState>) -> Result<HttpResponse> {
@@ -84,7 +122,7 @@ pub async fn update_settings() -> Result<HttpResponse> {
 
 /// GET /api/system/recent - Get recent 5 jobs
 pub async fn get_recent_activity(pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
-    let limit = 5;
+    let limit = 4;
 
     let (scan_jobs_r, print_jobs_r) = tokio::try_join!(
         ScanJob::get_recent(limit, &pool),

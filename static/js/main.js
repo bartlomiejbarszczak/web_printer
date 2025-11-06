@@ -8,6 +8,8 @@ const AppState = {
     refreshInterval: null
 };
 
+let eventSource = null;
+
 // API helper functions
 const API = {
     async get(endpoint) {
@@ -717,9 +719,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.location.pathname === '/') {
         setupDashboardForms();
         // Start queue updates for dashboard
-        updateJobQueue();
-        setInterval(updateJobQueue, 3000); // Update every 3 seconds
+        // updateJobQueue();
+        // setInterval(updateJobQueue, 3000); // Update every 3 seconds
     }
+
+    initializeSSE();
 
     // Start periodic updates
     AppState.refreshInterval = setInterval(updateSystemStatus, 5000); // Every 5 seconds
@@ -736,7 +740,15 @@ async function updateJobQueue() {
     }
 }
 
+// Store the current job queue data
+let currentJobQueue = [];
+
 function displayJobQueue(jobs) {
+    // Store the jobs for time updates
+    currentJobQueue = jobs;
+
+    updateQueueCount(jobs.length)
+
     const container = document.getElementById('queue-list');
     if (!container) return;
 
@@ -761,7 +773,7 @@ function displayJobQueue(jobs) {
         const processTime = calculateProcessingTime(job);
 
         return `
-            <div class="queue-item ${isProcessing ? 'processing' : 'queued'}">
+            <div class="queue-item ${isProcessing ? 'processing' : 'queued'}" data-job-index="${index}">
                 <div class="queue-position ${isProcessing ? 'processing' : ''}">
                     ${isProcessing ? '▶' : `#${index}`}
                 </div>
@@ -840,19 +852,68 @@ function startQueueTimeUpdates() {
     }
 
     queueTimeUpdateInterval = setInterval(() => {
-        // Update time displays without re-fetching data
         const container = document.getElementById('queue-list');
-        if (!container) return;
+        if (!container || !currentJobQueue || currentJobQueue.length === 0) return;
 
-        const timeElements = container.querySelectorAll('.queue-time-value');
-        timeElements.forEach((el, index) => {
-            const item = el.closest('.queue-item');
-            if (!item) return;
+        const queueItems = container.querySelectorAll('.queue-item');
 
-            // You would need to store job data to recalculate
-            // For now, this just demonstrates the concept
+        queueItems.forEach((item) => {
+            const jobIndex = parseInt(item.getAttribute('data-job-index'));
+            const jobData = currentJobQueue[jobIndex];
+
+            if (!jobData) return;
+
+            const isPrint = jobData.Print !== undefined;
+            const job = isPrint ? jobData.Print : jobData.Scan;
+            const isProcessing = ['processing', 'printing', 'scanning'].includes(job.status.toLowerCase());
+
+            const timeValueEl = item.querySelector('.queue-time-value');
+            if (timeValueEl) {
+                if (isProcessing) {
+                    timeValueEl.textContent = calculateProcessingTime(job);
+                } else {
+                    timeValueEl.textContent = calculateWaitTime(job);
+                }
+            }
         });
     }, 1000);
+}
+
+
+function initializeSSE() {
+    if (eventSource) {
+        eventSource.close();
+    }
+
+    eventSource = new EventSource("/api/sse/queue");
+
+    eventSource.addEventListener('open', () => {
+        console.log("SSE connection established");
+    });
+
+    eventSource.addEventListener('message', (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            console.log("Received queue update:", data);
+            handleSSEMessage(data);
+        } catch (error) {
+            console.error('Failed to parse SSE message:', error);
+        }
+    });
+
+    eventSource.addEventListener('error', (error) => {
+        console.log("SSE connection error:", error);
+        setTimeout(() => {
+            console.log('Reconnecting SSE...');
+            initializeSSE();
+        }, 5000);
+    });
+}
+
+function handleSSEMessage(data) {
+    if (window.location.pathname === '/') {
+        displayJobQueue(data);
+    }
 }
 
 // Cleanup on page unload
@@ -860,4 +921,8 @@ window.addEventListener('beforeunload', () => {
     if (AppState.refreshInterval) {
         clearInterval(AppState.refreshInterval);
     }
-});
+
+    if (eventSource) {
+        eventSource.close();
+    }
+})

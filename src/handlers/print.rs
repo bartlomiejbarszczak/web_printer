@@ -170,7 +170,6 @@ pub async fn submit_print_job(mut payload: Multipart, pool: web::Data<SqlitePool
         ErrorInternalServerError(e.to_string())
     })?;
 
-    // TODO add print job to job queue
     add_to_job_queue(&job_queue, Job::Print(print_job))
         .await
         .map_err(|e| {

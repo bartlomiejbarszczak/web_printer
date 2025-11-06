@@ -1,6 +1,8 @@
 use actix_files::Files;
 use actix_web::{web, App, HttpServer, middleware::Logger};
 use std::io;
+use tokio::sync::broadcast;
+
 
 mod handlers;
 mod services;
@@ -10,7 +12,7 @@ mod database;
 
 use handlers::{print, scan, system};
 use crate::database::init_database;
-use crate::models::{AppState, JobQueue};
+use crate::models::{AppState, JobQueue, Job};
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
@@ -34,7 +36,26 @@ async fn main() -> io::Result<()> {
     log::info!("Found devices:\n{}", app_state.show_devices().await);
 
     let job_queue = JobQueue::new();
+    let (queue_tx, _) = broadcast::channel::<Vec<Job>>(128);
 
+    // Queue SSE Loop
+    let jq_clone = job_queue.clone();
+    let pool_clone = pool.clone();
+    let tx_clone = queue_tx.clone();
+    
+    tokio::task::spawn(async move {
+        loop {
+            if jq_clone.is_changed().await {
+                log::info!("Job queue changed");
+                let msg = jq_clone.get_current_queue(&pool_clone).await;
+
+                if let Err(e) = tx_clone.send(msg) {
+                    log::error!("Error sending job queue: {}", e);
+                }
+            }
+        }
+    });
+    
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
@@ -66,6 +87,10 @@ async fn main() -> io::Result<()> {
                     .route("/system/nozzle/clean", web::post().to(system::nozzle_clean))
                     .route("/system/recent", web::get().to(system::get_recent_activity))
                     .route("/system/queue", web::get().to(system::get_current_queue))
+
+                    // SSE endpoints
+                    .route("/sse/queue", web::get().to(system::sse_queue))
+
             )
             // Web pages
             .route("/", web::get().to(system::index))
@@ -80,8 +105,10 @@ async fn main() -> io::Result<()> {
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(app_state.clone()))
             .app_data(web::Data::new(job_queue.clone()))
+            .app_data(web::Data::new(queue_tx.clone()))
     })
         .bind("0.0.0.0:8080")?
+        .workers(4)
         .run()
         .await
 }

@@ -2653,6 +2653,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -2948,6 +2949,7 @@ dependencies = [
  "actix-files",
  "actix-multipart",
  "actix-web",
+ "bytes",
  "chrono",
  "config",
  "env_logger",
@@ -2959,6 +2961,7 @@ dependencies = [
  "sqlx",
  "tempfile",
  "tokio",
+ "tokio-stream",
  "uuid",
 ]
 
