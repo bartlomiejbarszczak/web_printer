@@ -5,7 +5,8 @@ const AppState = {
     systemStatus: null,
     printers: [],
     scanners: [],
-    refreshInterval: null
+    refreshInterval: null,
+    uptime_ms: Number,
 };
 
 let eventSource = null;
@@ -285,6 +286,7 @@ async function updateSystemStatus() {
     try {
         const status = await API.get('/system/status');
         AppState.systemStatus = status;
+        AppState.uptime_ms = status.uptime_ms
 
         // Update status indicators
         updateStatusIndicator('cups-status', status.cups_available);
@@ -293,7 +295,7 @@ async function updateSystemStatus() {
         // Update dashboard stats if on main page
         if (window.location.pathname === '/') {
             updateDashboardStats(status);
-            await updateRecentActivity();
+            // await updateRecentActivity();
         }
 
     } catch (error) {
@@ -318,13 +320,15 @@ function updateDashboardStats(status) {
         'total-printers': AppState.printers.length,
         'total-scanners': AppState.scanners.length,
         'disk-space': status.disk_space_mb ? `${status.disk_space_mb} MB` : 'Unknown',
-        'uptime': status.uptime_str || 'Unknown'
+        'uptime': calculateUptime(status.uptime_ms) || 'Unknown'
     };
 
     Object.entries(elements).forEach(([id, value]) => {
         const element = document.getElementById(id);
         if (element) element.textContent = value;
     });
+
+    startUptimeUpdates();
 }
 
 
@@ -340,12 +344,6 @@ async function loadInitialData() {
 
         if (AppState.systemStatus?.sane_available) {
             AppState.scanners = await API.get('/scanners');
-        }
-
-        // Update UI if on dashboard
-        if (window.location.pathname === '/') {
-            updateDashboardStats(AppState.systemStatus);
-            await updateRecentActivity();
         }
 
     } catch (error) {
@@ -608,25 +606,6 @@ function setupDashboardForms() {
     setupScanRangeInputs();
 }
 
-// function setupScanRangeInputs() {
-//     const brightnessRange = document.getElementById('scan-brightness');
-//     const contrastRange = document.getElementById('scan-contrast');
-//     const brightnessValue = document.getElementById('brightness-value');
-//     const contrastValue = document.getElementById('contrast-value');
-//
-//     if (brightnessRange && brightnessValue) {
-//         brightnessRange.addEventListener('input', (e) => {
-//             brightnessValue.textContent = e.target.value;
-//         });
-//     }
-//
-//     if (contrastRange && contrastValue) {
-//         contrastRange.addEventListener('input', (e) => {
-//             contrastValue.textContent = e.target.value;
-//         });
-//     }
-// }
-
 function setupScanRangeInputs() {
     const brightnessRange = document.getElementById('scan-brightness');
     const contrastRange = document.getElementById('scan-contrast');
@@ -715,36 +694,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load initial data
     loadInitialData();
 
-    // Setup dashboard forms if on main page
     if (window.location.pathname === '/') {
         setupDashboardForms();
-        // Start queue updates for dashboard
-        // updateJobQueue();
-        // setInterval(updateJobQueue, 3000); // Update every 3 seconds
     }
 
     initializeSSE();
-
-    // Start periodic updates
-    // AppState.refreshInterval = setInterval(updateSystemStatus, 5000); // Every 5 seconds
 });
-
-// Job Queue Functions
-async function updateJobQueue() {
-    try {
-        const queueJobs = await API.get('/system/queue');
-        displayJobQueue(queueJobs);
-        updateQueueCount(queueJobs.length);
-    } catch (error) {
-        console.error('Failed to load job queue:', error);
-    }
-}
 
 // Store the current job queue data
 let currentJobQueue = [];
 
 function displayJobQueue(jobs) {
-    // Store the jobs for time updates
     currentJobQueue = jobs;
 
     updateQueueCount(jobs.length)
@@ -815,17 +775,21 @@ function updateQueueCount(count) {
     }
 }
 
+function calculateUptime(ms) {
+    return formatDuration(ms)
+}
+
 function calculateWaitTime(job) {
-    const createdAt = new Date(job.created_at);
     const now = new Date();
+    const createdAt = new Date(job.created_at);
     const diffMs = now - createdAt;
     return formatDuration(diffMs);
 }
 
 function calculateProcessingTime(job) {
     if (!job.started_at) return '0s';
-    const startedAt = new Date(job.started_at);
     const now = new Date();
+    const startedAt = new Date(job.started_at);
     const diffMs = now - startedAt;
     return formatDuration(diffMs);
 }
@@ -834,8 +798,11 @@ function formatDuration(ms) {
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 60);
 
-    if (hours > 0) {
+    if (days > 0) {
+        return `${days}d ${hours}h ${minutes % 60}m`
+    } else if (hours > 0) {
         return `${hours}h ${minutes % 60}m`;
     } else if (minutes > 0) {
         return `${minutes}m ${seconds % 60}s`;
@@ -879,6 +846,22 @@ function startQueueTimeUpdates() {
     }, 1000);
 }
 
+let uptimeUpdateInterval = null;
+
+function startUptimeUpdates() {
+
+    if (uptimeUpdateInterval) {
+        clearInterval(uptimeUpdateInterval);
+    }
+
+    uptimeUpdateInterval = setInterval(() => {
+        const el = document.getElementById('uptime')
+        if (el) {
+            AppState.uptime_ms += 1000;
+            el.textContent = calculateUptime(AppState.uptime_ms)
+        }
+    }, 1000);
+}
 
 function initializeSSE() {
     if (eventSource) {
@@ -929,6 +912,15 @@ async function handleSSEMessage(data) {
                 const el = document.getElementById('active-scans');
                 if (el) el.textContent = data.status.active_scans;
             }
+
+            if (data.status.disk_space_mb !== undefined) {
+                const el = document.getElementById('disk-space');
+                if (el) el.textContent = `${data.status.disk_space_mb} MB`;
+            }
+            break;
+
+        case 'recent_activity':
+            console.log("Not implemented")
             break;
 
         default:

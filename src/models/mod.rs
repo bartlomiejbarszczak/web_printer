@@ -55,7 +55,7 @@ pub struct SystemStatus {
     pub active_print_jobs: usize,
     pub active_scan_jobs: usize,
     pub disk_space_mb: Option<u64>,
-    pub uptime_str: String
+    pub uptime_ms: u128
 }
 
 

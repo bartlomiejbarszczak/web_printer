@@ -192,18 +192,13 @@ pub async fn execute_print_job(print_job: &mut PrintJob, pool: &SqlitePool) -> R
                 log::error!("Failed to update print job: {}", e);
                 e.to_string()
             })?;
-            //
-            // // Start background job monitoring
-            // tokio::spawn(async move {
-            //     if let Err(e) = monitor_print_job(job_id, cups_job_id, &pool).await {
-            //         log::error!("Monitor print job {} failed: {}", job_id, e);
-            //     };
-            // });
+
             if let Err(e) = monitor_print_job(job_id, cups_job_id, &pool).await {
                 log::error!("Monitor print job {} failed: {}", job_id, e);
             };
 
-            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            // CUPS ended print but printer was still busy, so there is 10 sec delay
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
         },
         Err(e) => {
             print_job.set_error(e.clone());

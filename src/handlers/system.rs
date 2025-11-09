@@ -3,13 +3,14 @@ use actix_files::NamedFile;
 use actix_web::error::ErrorInternalServerError;
 use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
-use tokio::process::Command;
-use tokio::time::{Instant, Duration};
+use tokio::time::{Instant};
+
 use crate::handlers::{json_success, internal_error, json_error};
 use crate::models::{AppState, PrintJob, ScanJob, SystemStatus, Job, JobQueue};
 use crate::services::cups::CupsService;
 use crate::services::sane::SaneService;
 use crate::services::escputil::MaintenanceService;
+use crate::utils::get_disk_space;
 
 
 
@@ -53,7 +54,7 @@ pub async fn get_status(app_state: web::Data<AppState>) -> Result<HttpResponse> 
         active_print_jobs,
         active_scan_jobs,
         disk_space_mb,
-        uptime_str
+        uptime_ms: uptime_str
     };
 
     json_success(status)
@@ -149,57 +150,38 @@ pub async fn get_current_queue(job_queue: web::Data<JobQueue>, pool: web::Data<S
     json_success(data)
 }
 
-/// Helper function to get available disk space
-async fn get_disk_space() -> Option<u64> {
-    match Command::new("df").args(["-m", "."]).output().await {
-        Ok(output) if output.status.success() => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            for line in stdout.lines().skip(1) {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 4 {
-                    if let Ok(available) = parts[3].parse::<u64>() {
-                        return Some(available);
-                    }
-                }
-            }
-            None
-        },
-        _ => None,
-    }
-}
-
 /// Helper function to get current uptime
-async fn get_uptime(start_time: Instant) -> String {
+async fn get_uptime(start_time: Instant) -> u128 {
     let uptime = start_time.elapsed();
-
-    format_duration(uptime)
+    uptime.as_millis()
+    // format_duration(uptime)
 }
 
-fn format_duration(duration: Duration) -> String {
-    let total_seconds = duration.as_secs();
-
-    let days = total_seconds / 86400;
-    let hours = (total_seconds % 86400) / 3600;
-    let minutes = (total_seconds % 3600) / 60;
-    let seconds = total_seconds % 60;
-
-    let mut parts = Vec::new();
-
-    if days > 0 {
-        parts.push(format!("{}d", days));
-    }
-    if hours > 0 {
-        parts.push(format!("{}h", hours));
-    }
-    if minutes > 0 {
-        parts.push(format!("{}m", minutes));
-    }
-    if seconds > 0 || parts.is_empty() {
-        parts.push(format!("{}s", seconds));
-    }
-
-    parts.join(" ")
-}
+// fn format_duration(duration: Duration) -> String {
+//     let total_seconds = duration.as_secs();
+//
+//     let days = total_seconds / 86400;
+//     let hours = (total_seconds % 86400) / 3600;
+//     let minutes = (total_seconds % 3600) / 60;
+//     let seconds = total_seconds % 60;
+//
+//     let mut parts = Vec::new();
+//
+//     if days > 0 {
+//         parts.push(format!("{}d", days));
+//     }
+//     if hours > 0 {
+//         parts.push(format!("{}h", hours));
+//     }
+//     if minutes > 0 {
+//         parts.push(format!("{}m", minutes));
+//     }
+//     if seconds > 0 || parts.is_empty() {
+//         parts.push(format!("{}s", seconds));
+//     }
+//
+//     parts.join(" ")
+// }
 
 fn was_within_last_hour(completed_at: Option<DateTime<Utc>>) -> bool {
     let completed_at = match completed_at {

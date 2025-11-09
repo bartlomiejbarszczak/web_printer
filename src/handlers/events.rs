@@ -13,6 +13,7 @@ use sqlx::SqlitePool;
 use serde_json::json;
 
 use crate::models::{PrintJob, ScanJob, ScanJobStatus, PrintJobStatus, JobQueue};
+use crate::utils::get_disk_space;
 
 #[derive(Clone)]
 pub struct EventState {
@@ -78,6 +79,7 @@ fn create_event_stream(
 
     let mut last_queue_version = 0u64;
     let mut last_status_version = 0u64;
+    let mut last_recent_version = 0u64;
 
     let stream = async_stream::stream! {
         let data = job_queue.get_current_queue(&pool).await;
@@ -139,8 +141,13 @@ async fn get_system_status(pool: &SqlitePool) -> Result<serde_json::Value, sqlx:
         pool
     ).await?.len();
 
+    let disk_space_mb = get_disk_space().await;
+
     Ok(json!({
         "active_prints": active_prints,
         "active_scans": active_scans,
+        "disk_space_mb": disk_space_mb,
     }))
 }
+
+
