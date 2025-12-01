@@ -5,47 +5,20 @@ const AppState = {
     systemStatus: null,
     printers: [],
     scanners: [],
-    refreshInterval: null,
-    uptime_ms: Number,
+    uptime_ms: 0,
 };
 
 let eventSource = null;
+let currentJobQueue = [];
+let queueTimeUpdateInterval = null;
+let uptimeUpdateInterval = null;
 
-// API helper functions
+
+// API HELPER
 const API = {
-    async get(endpoint) {
+    request: async function (endpoint, options = {}) {
         try {
-            const response = await fetch(`/api${endpoint}`);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const result = await response.json();
-
-            // Handle ApiResponse wrapper
-            if (result.success !== undefined) {
-                if (!result.success) {
-                    throw new Error(result.message || 'API request failed');
-                }
-                return result.data;
-            }
-
-            return result;
-        } catch (error) {
-            console.error(`GET ${endpoint} failed:`, error);
-            throw error;
-        }
-    },
-
-    async post(endpoint, data) {
-        try {
-            const response = await fetch(`/api${endpoint}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data)
-            });
+            const response = await fetch(`/api${endpoint}`, options);
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
@@ -54,7 +27,6 @@ const API = {
 
             const result = await response.json();
 
-            // Handle ApiResponse wrapper
             if (result.success !== undefined) {
                 if (!result.success) {
                     throw new Error(result.message || 'API request failed');
@@ -64,89 +36,101 @@ const API = {
 
             return result;
         } catch (error) {
-            console.error(`POST ${endpoint} failed:`, error);
+            console.error(`${options.method || 'GET'} ${endpoint} failed:`, error);
             throw error;
         }
     },
 
-    async postForm(endpoint, formData) {
-        try {
-            const response = await fetch(`/api${endpoint}`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const result = await response.json();
-
-            // Handle ApiResponse wrapper
-            if (result.success !== undefined) {
-                if (!result.success) {
-                    throw new Error(result.message || 'API request failed');
-                }
-                return result.data;
-            }
-
-            return result;
-        } catch (error) {
-            console.error(`POST ${endpoint} failed:`, error);
-            throw error;
-        }
+    get(endpoint) {
+        return this.request(endpoint);
     },
 
-    async delete(endpoint) {
-        try {
-            const response = await fetch(`/api${endpoint}`, {
-                method: 'DELETE'
-            });
+    post(endpoint, data) {
+        return this.request(endpoint, {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+        });
+    },
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
-            }
+    postForm(endpoint, formData) {
+        return this.request(endpoint, {
+            method: 'POST', body: formData
+        });
+    },
 
-            const result = await response.json();
-
-            // Handle ApiResponse wrapper
-            if (result.success !== undefined) {
-                if (!result.success) {
-                    throw new Error(result.message || 'API request failed');
-                }
-                return result.data;
-            }
-
-            return result;
-        } catch (error) {
-            console.error(`DELETE ${endpoint} failed:`, error);
-            throw error;
-        }
+    delete(endpoint) {
+        return this.request(endpoint, {method: 'DELETE'});
     }
 };
 
-// Toast notification system
+
+// TOAST NOTIFICATION SYSTEM
 const Toast = {
     container: null,
 
     init() {
-        this.container = document.getElementById('toast-container') || this.createContainer();
+        if (!this.container) {
+            this.container = this.createContainer();
+            this.injectStyles();
+        }
     },
 
     createContainer() {
         const container = document.createElement('div');
         container.id = 'toast-container';
         container.className = 'toast-container';
-        container.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 10000;
-        `;
         document.body.appendChild(container);
         return container;
+    },
+
+    injectStyles() {
+        if (document.querySelector('#toast-styles')) return;
+
+        const style = document.createElement('style');
+        style.id = 'toast-styles';
+        style.textContent = `
+            .toast-container {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 10000;
+            }
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+            .toast {
+                padding: 12px 16px;
+                border-radius: 8px;
+                margin-bottom: 10px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                animation: slideIn 0.3s ease;
+                min-width: 300px;
+                color: white;
+            }
+            .toast-content {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                width: 100%;
+            }
+            .toast-message {
+                flex: 1;
+            }
+            .toast-close {
+                background: none;
+                border: none;
+                color: inherit;
+                cursor: pointer;
+                padding: 4px;
+            }
+            .status-online { color: #10b981; }
+            .status-offline { color: #ef4444; }
+        `;
+        document.head.appendChild(style);
     },
 
     show(message, type = 'info', duration = 5000) {
@@ -154,30 +138,16 @@ const Toast = {
 
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
+        toast.style.background = this.getColor(type);
 
-        const icon = this.getIcon(type);
         toast.innerHTML = `
             <div class="toast-content">
-                <i class="fas ${icon}"></i>
+                <i class="fas ${this.getIcon(type)}"></i>
                 <span class="toast-message">${message}</span>
                 <button class="toast-close" onclick="this.parentElement.parentElement.remove()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-        `;
-
-        // Add styles
-        toast.style.cssText = `
-            background: ${this.getColor(type)};
-            color: white;
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            animation: slideIn 0.3s ease;
-            display: flex;
-            align-items: center;
-            min-width: 300px;
         `;
 
         this.container.appendChild(toast);
@@ -204,100 +174,140 @@ const Toast = {
 
     getColor(type) {
         const colors = {
-            success: '#10b981',
-            error: '#ef4444',
-            warning: '#f59e0b',
-            info: '#3b82f6'
+            success: '#10b981', error: '#ef4444', warning: '#f59e0b', info: '#3b82f6'
         };
         return colors[type] || colors.info;
     },
 
-    success(message, duration) { this.show(message, 'success', duration); },
-    error(message, duration) { this.show(message, 'error', duration); },
-    warning(message, duration) { this.show(message, 'warning', duration); },
-    info(message, duration) { this.show(message, 'info', duration); }
+    success(message, duration) {
+        this.show(message, 'success', duration);
+    }, error(message, duration) {
+        this.show(message, 'error', duration);
+    }, warning(message, duration) {
+        this.show(message, 'warning', duration);
+    }, info(message, duration) {
+        this.show(message, 'info', duration);
+    }
 };
 
-// Utility functions
+
+// UTILITY FUNCTIONS
 const Utils = {
     formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     },
 
-    formatDate(timestamp) {
-        const date = new Date(timestamp * 1000);
-        return date.toLocaleString();
+    // formatDate(timestamp) {
+    //     return new Date(timestamp * 1000).toLocaleString();
+    // },
+    //
+    // formatJobId(id) {
+    //     return `${id.substring(0, 8)}...`;
+    // },
+    //
+    // debounce(func, wait) {
+    //     let timeout;
+    //     return function executedFunction(...args) {
+    //         clearTimeout(timeout);
+    //         timeout = setTimeout(() => func(...args), wait);
+    //     };
+    // },
+
+    truncateFilename(filename, maxLength = 20) {
+        if (!filename || filename.length <= maxLength) return filename;
+
+        const lastDotIndex = filename.lastIndexOf('.');
+        if (lastDotIndex === -1) {
+            return `${filename.substring(0, maxLength - 3)}...`;
+        }
+
+        const ext = filename.substring(lastDotIndex);
+        const name = filename.substring(0, lastDotIndex);
+        const availableLength = maxLength - ext.length - 3;
+
+        return `${name.substring(0, availableLength)}...${ext}`;
     },
 
-    formatJobId(id) {
-        return id.substring(0, 8) + '...';
+    formatDuration(ms) {
+        const seconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+        const days = Math.floor(hours / 24);
+
+        if (days > 0) {
+            return `${days}d ${hours % 24}h ${minutes % 60}m`;
+        } else if (hours > 0) {
+            return `${hours}h ${minutes % 60}m`;
+        } else if (minutes > 0) {
+            return `${minutes}m ${seconds % 60}s`;
+        } else {
+            return `${seconds}s`;
+        }
     },
 
-    debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
+    formatActivityTime(timestamp) {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins} min ago`;
+        if (diffHours < 24) return `${diffHours} hours ago`;
+        return date.toLocaleDateString();
     }
 };
 
-// Modal management
+
+// MODAL MANAGEMENT
 const Modal = {
     show(modalId) {
         const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
+        if (!modal) return;
 
-            // Focus management
-            const firstInput = modal.querySelector('input, select, textarea, button');
-            if (firstInput) firstInput.focus();
-        }
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+
+        // Focus first interactive element
+        const firstInput = modal.querySelector('input, select, textarea, button');
+        firstInput?.focus();
     },
 
     hide(modalId) {
         const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.style.display = 'none';
-            document.body.style.overflow = '';
-        }
+        if (!modal) return;
+
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
     },
 
     hideAll() {
-        const modals = document.querySelectorAll('.modal');
-        modals.forEach(modal => {
+        document.querySelectorAll('.modal').forEach(modal => {
             modal.style.display = 'none';
         });
         document.body.style.overflow = '';
     }
 };
 
-// System status management
+
+// SYSTEM STATUS
 async function updateSystemStatus() {
     try {
         const status = await API.get('/system/status');
         AppState.systemStatus = status;
-        AppState.uptime_ms = status.uptime_ms
+        AppState.uptime_ms = status.uptime_ms;
 
-        // Update status indicators
         updateStatusIndicator('cups-status', status.cups_available);
         updateStatusIndicator('sane-status', status.sane_available);
 
-        // Update dashboard stats if on main page
         if (window.location.pathname === '/') {
             updateDashboardStats(status);
-            // await updateRecentActivity();
         }
-
     } catch (error) {
         console.error('Failed to update system status:', error);
         Toast.error('Failed to update system status');
@@ -306,24 +316,26 @@ async function updateSystemStatus() {
 
 function updateStatusIndicator(elementId, isAvailable) {
     const indicator = document.getElementById(elementId);
-    if (indicator) {
-        const circle = indicator.querySelector('i');
-        circle.className = isAvailable ? 'fas fa-circle status-online' : 'fas fa-circle status-offline';
-        indicator.title = isAvailable ? 'Service Available' : 'Service Unavailable';
+    if (!indicator) return;
+
+    const circle = indicator.querySelector('i');
+    if (circle) {
+        circle.className = `fas fa-circle ${isAvailable ? 'status-online' : 'status-offline'}`;
     }
+    indicator.title = isAvailable ? 'Service Available' : 'Service Unavailable';
 }
 
 function updateDashboardStats(status) {
-    const elements = {
+    const updates = {
         'active-prints': status.active_print_jobs || 0,
         'active-scans': status.active_scan_jobs || 0,
         'total-printers': AppState.printers.length,
         'total-scanners': AppState.scanners.length,
         'disk-space': status.disk_space_mb ? `${status.disk_space_mb} MB` : 'Unknown',
-        'uptime': calculateUptime(status.uptime_ms) || 'Unknown'
+        'uptime': Utils.formatDuration(status.uptime_ms) || 'Unknown'
     };
 
-    Object.entries(elements).forEach(([id, value]) => {
+    Object.entries(updates).forEach(([id, value]) => {
         const element = document.getElementById(id);
         if (element) element.textContent = value;
     });
@@ -332,12 +344,11 @@ function updateDashboardStats(status) {
 }
 
 
-// Load initial data
+// DATA LOADING
 async function loadInitialData() {
     try {
         await updateSystemStatus();
 
-        // Load printers and scanners
         if (AppState.systemStatus?.cups_available) {
             AppState.printers = await API.get('/printers');
         }
@@ -345,14 +356,12 @@ async function loadInitialData() {
         if (AppState.systemStatus?.sane_available) {
             AppState.scanners = await API.get('/scanners');
         }
-
     } catch (error) {
         console.error('Failed to load initial data:', error);
         Toast.error('Failed to load initial data');
     }
 }
 
-// Update recent activity
 async function updateRecentActivity() {
     try {
         const recentJobs = await API.get('/system/recent');
@@ -366,7 +375,7 @@ function displayRecentActivity(jobs) {
     const container = document.getElementById('recent-activity');
     if (!container) return;
 
-    if (!jobs || jobs.length === 0) {
+    if (!jobs?.length) {
         container.innerHTML = `
             <div class="activity-placeholder">
                 <i class="fas fa-clock"></i>
@@ -379,19 +388,17 @@ function displayRecentActivity(jobs) {
     container.innerHTML = jobs.map(job => {
         const isPrint = job.Print !== undefined;
         const jobData = isPrint ? job.Print : job.Scan;
-        const icon = isPrint ? 'print' : 'scan';
         const type = isPrint ? 'Print' : 'Scan';
-        const name = truncateFilename(isPrint ? jobData.filename : (jobData.output_filename || 'Scan'), 20);
+        const name = Utils.truncateFilename(isPrint ? jobData.filename : (jobData.output_filename || 'Scan'), 20);
 
         return `
             <div class="activity-item">
-                <div class="activity-icon ${icon}">
-<!--                    <i class="fas fa-${icon}"></i>-->
+                <div class="activity-icon ${isPrint ? 'print' : 'scan'}">
                     <i class="fas fa-print"></i>
                 </div>
                 <div class="activity-content">
                     <div class="activity-title">${type}: ${name}</div>
-                    <div class="activity-time">${formatActivityTime(jobData.completed_at || jobData.created_at)}</div>
+                    <div class="activity-time">${Utils.formatActivityTime(jobData.completed_at || jobData.created_at)}</div>
                 </div>
                 <span class="status-badge status-${jobData.status.toLowerCase()}">
                     ${jobData.status}
@@ -401,29 +408,8 @@ function displayRecentActivity(jobs) {
     }).join('');
 }
 
-function truncateFilename(filename, maxLength = 20) {
-    if (!filename || filename.length <= maxLength) return filename;
 
-    const ext = filename.split('.').pop();
-    const name = filename.substring(0, filename.lastIndexOf('.'));
-
-    return name.substring(0, maxLength - ext.length - 4) + '...'
-}
-
-function formatActivityTime(timestamp) {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} min ago`;
-    if (diffHours < 24) return `${diffHours} hours ago`;
-    return date.toLocaleDateString();
-}
-
-// Printer maintenance functions
+// PRINTER MAINTENANCE
 async function performNozzleCheck() {
     const btn = document.getElementById('nozzle-check-btn');
     if (!btn) return;
@@ -474,14 +460,11 @@ async function performNozzleClean() {
     }
 }
 
-// Print dialog functions (for dashboard)
+
+// PRINT DIALOG
 function showPrintDialog() {
-    const modal = document.getElementById('print-modal');
-    if (modal) {
-        // Populate printer dropdown
-        populatePrinterSelect('print-printer');
-        Modal.show('print-modal');
-    }
+    populatePrinterSelect('print-printer');
+    Modal.show('print-modal');
 }
 
 function closePrintDialog() {
@@ -504,22 +487,17 @@ function populatePrinterSelect(selectId) {
     });
 }
 
-// Scan dialog functions (for dashboard)
+// SCAN DIALOG
 function showScanDialog() {
-    const modal = document.getElementById('scan-modal');
-    if (modal) {
-        // Populate scanner dropdown
-        populateScannerSelect('scan-scanner');
-        Modal.show('scan-modal');
-    }
+    populateScannerSelect('scan-scanner');
+    Modal.show('scan-modal');
 }
 
 function closeScanDialog() {
     Modal.hide('scan-modal');
     const form = document.getElementById('scan-form');
     if (form) {
-        form.reset();
-        // Reset range values
+        form.reset(); // Reset range value displays
         const brightnessValue = document.getElementById('brightness-value');
         const contrastValue = document.getElementById('contrast-value');
         if (brightnessValue) brightnessValue.textContent = '0';
@@ -535,98 +513,29 @@ function populateScannerSelect(selectId) {
 
     AppState.scanners.forEach(scanner => {
         const option = document.createElement('option');
-        option.value = scanner.name; // Keep the actual device name for API
-        // Display human-readable vendor and model
+        option.value = scanner.name;
         option.textContent = `${scanner.vendor} ${scanner.model}`;
         select.appendChild(option);
     });
 }
 
-// Event handlers for dashboard forms
-function setupDashboardForms() {
-    // Print form handler
-    const printForm = document.getElementById('print-form');
-    if (printForm) {
-        printForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const formData = new FormData(printForm);
-
-            // Remove pages field if it's empty to let the printer print all pages
-            const pagesValue = formData.get('pages');
-            if (!pagesValue || pagesValue.trim() === '') {
-                formData.delete('pages');
-            }
-
-            try {
-                const result = await API.postForm('/print', formData);
-                Toast.success('Print job submitted successfully');
-                closePrintDialog();
-
-            } catch (error) {
-                Toast.error(error.message);
-            }
-        });
-    }
-
-    // Scan form handler
-    const scanForm = document.getElementById('scan-form');
-    if (scanForm) {
-        scanForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const formData = new FormData(scanForm);
-            const scanData = Object.fromEntries(formData);
-
-            // Convert numeric fields
-            scanData.resolution = parseInt(scanData.resolution);
-            if (scanData.brightness) scanData.brightness = parseInt(scanData.brightness);
-            if (scanData.contrast) scanData.contrast = parseInt(scanData.contrast);
-
-            // Remove filename if empty to use default naming
-            if (!scanData.filename || scanData.filename.trim() === '') {
-                delete scanData.filename;
-            } else {
-                // Trim whitespace from filename
-                scanData.filename = scanData.filename.trim();
-            }
-
-            try {
-                const result = await API.post('/scan', scanData);
-                Toast.success('Scan job started successfully');
-                closeScanDialog();
-
-            } catch (error) {
-                Toast.error(error.message);
-            }
-        });
-    }
-
-    // Setup range input listeners for scan form
-    setupScanRangeInputs();
-}
-
 function setupScanRangeInputs() {
-    const brightnessRange = document.getElementById('scan-brightness');
-    const contrastRange = document.getElementById('scan-contrast');
-    const brightnessValue = document.getElementById('brightness-value');
-    const contrastValue = document.getElementById('contrast-value');
+    const ranges = [{input: 'scan-brightness', display: 'brightness-value'}, {
+        input: 'scan-contrast', display: 'contrast-value'
+    }];
 
-    if (brightnessRange && brightnessValue) {
-        brightnessRange.addEventListener('input', (e) => {
-            brightnessValue.textContent = e.target.value;
-            updateSliderBackground(e.target);
-        });
-        updateSliderBackground(brightnessRange);
-    }
+    ranges.forEach(({input, display}) => {
+        const rangeInput = document.getElementById(input);
+        const displayElement = document.getElementById(display);
 
-    if (contrastRange && contrastValue) {
-        contrastRange.addEventListener('input', (e) => {
-            contrastValue.textContent = e.target.value;
-            updateSliderBackground(e.target);
-        });
-        updateSliderBackground(contrastRange);
-    }
+        if (rangeInput && displayElement) {
+            rangeInput.addEventListener('input', (e) => {
+                displayElement.textContent = e.target.value;
+                updateSliderBackground(e.target);
+            });
+            updateSliderBackground(rangeInput);
+        }
+    });
 }
 
 function updateSliderBackground(slider) {
@@ -637,82 +546,81 @@ function updateSliderBackground(slider) {
     slider.style.background = `linear-gradient(to right, var(--primary-light) 0%, var(--primary-light) ${percentage}%, var(--bg-tertiary) ${percentage}%, var(--bg-tertiary) 100%)`;
 }
 
-// Initialize everything when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    // Initialize toast system
-    Toast.init();
 
-    // Add CSS for toast animations if not present
-    if (!document.querySelector('#toast-styles')) {
-        const style = document.createElement('style');
-        style.id = 'toast-styles';
-        style.textContent = `
-            @keyframes slideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            @keyframes slideOut {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-            .toast-content {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                width: 100%;
-            }
-            .toast-message {
-                flex: 1;
-            }
-            .toast-close {
-                background: none;
-                border: none;
-                color: inherit;
-                cursor: pointer;
-                padding: 4px;
-            }
-            .status-online { color: #10b981; }
-            .status-offline { color: #ef4444; }
-        `;
-        document.head.appendChild(style);
-    }
+// FORM HANDLERS
+function setupDashboardForms() {
+    setupPrintForm();
+    setupScanForm();
+    setupScanRangeInputs();
+}
 
-    // Setup modal click handlers
-    document.addEventListener('click', (e) => {
-        if (e.target.classList.contains('modal')) {
-            Modal.hideAll();
+function setupPrintForm() {
+    const printForm = document.getElementById('print-form');
+    if (!printForm) return;
+
+    printForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const formData = new FormData(printForm);
+
+        // Remove pages field if empty to print all pages
+        const pagesValue = formData.get('pages');
+        if (!pagesValue?.trim()) {
+            formData.delete('pages');
+        }
+
+        try {
+            await API.postForm('/print', formData);
+            Toast.success('Print job submitted successfully');
+            closePrintDialog();
+        } catch (error) {
+            Toast.error(error.message);
         }
     });
+}
 
-    // Setup escape key handler
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            Modal.hideAll();
+function setupScanForm() {
+    const scanForm = document.getElementById('scan-form');
+    if (!scanForm) return;
+
+    scanForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const formData = new FormData(scanForm);
+        const scanData = Object.fromEntries(formData);
+
+        // Convert numeric fields
+        scanData.resolution = parseInt(scanData.resolution);
+        if (scanData.brightness) scanData.brightness = parseInt(scanData.brightness);
+        if (scanData.contrast) scanData.contrast = parseInt(scanData.contrast);
+
+        // Handle filename
+        if (!scanData.filename?.trim()) {
+            delete scanData.filename;
+        } else {
+            scanData.filename = scanData.filename.trim();
+        }
+
+        try {
+            await API.post('/scan', scanData);
+            Toast.success('Scan job started successfully');
+            closeScanDialog();
+        } catch (error) {
+            Toast.error(error.message);
         }
     });
+}
 
-    // Load initial data
-    loadInitialData();
 
-    if (window.location.pathname === '/') {
-        setupDashboardForms();
-    }
-
-    initializeSSE();
-});
-
-// Store the current job queue data
-let currentJobQueue = [];
-
+// JOB QUEUE
 function displayJobQueue(jobs) {
     currentJobQueue = jobs;
-
-    updateQueueCount(jobs.length)
+    updateQueueCount(jobs.length);
 
     const container = document.getElementById('queue-list');
     if (!container) return;
 
-    if (!jobs || jobs.length === 0) {
+    if (!jobs?.length) {
         container.innerHTML = `
             <div class="queue-placeholder">
                 <i class="fas fa-check-circle"></i>
@@ -738,32 +646,23 @@ function displayJobQueue(jobs) {
                     ${isProcessing ? '▶' : `#${index}`}
                 </div>
                 <div class="queue-job-icon ${type} ${isProcessing ? 'processing' : ''}">
-<!--                    <i class="fas fa-${type === 'print' ? 'print' : 'scanner'}"></i>-->
                     <i class="fas fa-print"></i>
                 </div>
                 <div class="queue-job-info">
-                    <div class="queue-job-title">${type === 'print' ? 'Print' : 'Scan'}: ${filename}</div>
+                    <div class="queue-job-title">${isPrint ? 'Print' : 'Scan'}: ${filename}</div>
                     <div class="queue-job-subtitle">
-                        ${isProcessing ?
-            `<span class="processing-indicator"><i class="fas fa-spinner fa-spin"></i> Processing</span>` :
-            `Status: ${job.status}`
-        }
+                        ${isProcessing ? '<span class="processing-indicator"><i class="fas fa-spinner fa-spin"></i> Processing</span>' : `Status: ${job.status}`}
                     </div>
                 </div>
                 <div class="queue-job-time">
-                    ${isProcessing ? `
-                        <span class="queue-time-label">Processing</span>
-                        <span class="queue-time-value processing">${processTime}</span>
-                    ` : `
-                        <span class="queue-time-label">Waiting</span>
-                        <span class="queue-time-value waiting">${waitTime}</span>
-                    `}
+                    ${isProcessing ? `<span class="queue-time-label">Processing</span>
+                           <span class="queue-time-value processing">${processTime}</span>` : `<span class="queue-time-label">Waiting</span>
+                           <span class="queue-time-value waiting">${waitTime}</span>`}
                 </div>
             </div>
         `;
     }).join('');
 
-    // Update times every second
     startQueueTimeUpdates();
 }
 
@@ -775,43 +674,18 @@ function updateQueueCount(count) {
     }
 }
 
-function calculateUptime(ms) {
-    return formatDuration(ms)
-}
-
 function calculateWaitTime(job) {
     const now = new Date();
     const createdAt = new Date(job.created_at);
-    const diffMs = now - createdAt;
-    return formatDuration(diffMs);
+    return Utils.formatDuration(now - createdAt);
 }
 
 function calculateProcessingTime(job) {
     if (!job.started_at) return '0s';
     const now = new Date();
     const startedAt = new Date(job.started_at);
-    const diffMs = now - startedAt;
-    return formatDuration(diffMs);
+    return Utils.formatDuration(now - startedAt);
 }
-
-function formatDuration(ms) {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 60);
-
-    if (days > 0) {
-        return `${days}d ${hours}h ${minutes % 60}m`
-    } else if (hours > 0) {
-        return `${hours}h ${minutes % 60}m`;
-    } else if (minutes > 0) {
-        return `${minutes}m ${seconds % 60}s`;
-    } else {
-        return `${seconds}s`;
-    }
-}
-
-let queueTimeUpdateInterval = null;
 
 function startQueueTimeUpdates() {
     if (queueTimeUpdateInterval) {
@@ -820,14 +694,13 @@ function startQueueTimeUpdates() {
 
     queueTimeUpdateInterval = setInterval(() => {
         const container = document.getElementById('queue-list');
-        if (!container || !currentJobQueue || currentJobQueue.length === 0) return;
+        if (!container || !currentJobQueue?.length) return;
 
         const queueItems = container.querySelectorAll('.queue-item');
 
         queueItems.forEach((item) => {
             const jobIndex = parseInt(item.getAttribute('data-job-index'));
             const jobData = currentJobQueue[jobIndex];
-
             if (!jobData) return;
 
             const isPrint = jobData.Print !== undefined;
@@ -836,33 +709,30 @@ function startQueueTimeUpdates() {
 
             const timeValueEl = item.querySelector('.queue-time-value');
             if (timeValueEl) {
-                if (isProcessing) {
-                    timeValueEl.textContent = calculateProcessingTime(job);
-                } else {
-                    timeValueEl.textContent = calculateWaitTime(job);
-                }
+                timeValueEl.textContent = isProcessing ? calculateProcessingTime(job) : calculateWaitTime(job);
             }
         });
     }, 1000);
 }
 
-let uptimeUpdateInterval = null;
 
+// UPTIME UPDATES
 function startUptimeUpdates() {
-
     if (uptimeUpdateInterval) {
         clearInterval(uptimeUpdateInterval);
     }
 
     uptimeUpdateInterval = setInterval(() => {
-        const el = document.getElementById('uptime')
+        const el = document.getElementById('uptime');
         if (el) {
             AppState.uptime_ms += 1000;
-            el.textContent = calculateUptime(AppState.uptime_ms)
+            el.textContent = Utils.formatDuration(AppState.uptime_ms);
         }
     }, 1000);
 }
 
+
+// SERVER-SENT EVENTS (SSE)
 function initializeSSE() {
     if (eventSource) {
         eventSource.close();
@@ -904,23 +774,11 @@ async function handleSSEMessage(data) {
             break;
 
         case 'status_update':
-            if (data.status.active_prints !== undefined) {
-                const el = document.getElementById('active-prints');
-                if (el) el.textContent = data.status.active_prints;
-            }
-            if (data.status.active_scans !== undefined) {
-                const el = document.getElementById('active-scans');
-                if (el) el.textContent = data.status.active_scans;
-            }
-
-            if (data.status.disk_space_mb !== undefined) {
-                const el = document.getElementById('disk-space');
-                if (el) el.textContent = `${data.status.disk_space_mb} MB`;
-            }
+            updateStatusFromSSE(data.status);
             break;
 
         case 'recent_activity':
-            console.log("Not implemented")
+            console.log("Recent activity update not implemented");
             break;
 
         default:
@@ -928,13 +786,53 @@ async function handleSSEMessage(data) {
     }
 }
 
-// Cleanup on page unload
-window.addEventListener('beforeunload', () => {
-    if (AppState.refreshInterval) {
-        clearInterval(AppState.refreshInterval);
+function updateStatusFromSSE(status) {
+    const updates = {
+        'active-prints': status.active_prints,
+        'active-scans': status.active_scans,
+        'disk-space': status.disk_space_mb !== undefined ? `${status.disk_space_mb} MB` : null
+    };
+
+    Object.entries(updates).forEach(([id, value]) => {
+        if (value !== undefined && value !== null) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value;
+        }
+    });
+}
+
+
+// INITIALIZATION & CLEANUP
+document.addEventListener('DOMContentLoaded', () => {
+    Toast.init();
+
+    // Setup modal handlers
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('modal')) {
+            Modal.hideAll();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            Modal.hideAll();
+        }
+    });
+
+    // Load initial data
+    loadInitialData();
+
+    // Setup dashboard if on main page
+    if (window.location.pathname === '/') {
+        setupDashboardForms();
     }
 
-    if (eventSource) {
-        eventSource.close();
-    }
-})
+    // Initialize SSE
+    initializeSSE();
+});
+
+window.addEventListener('beforeunload', () => {
+    if (queueTimeUpdateInterval) clearInterval(queueTimeUpdateInterval);
+    if (uptimeUpdateInterval) clearInterval(uptimeUpdateInterval);
+    if (eventSource) eventSource.close();
+});

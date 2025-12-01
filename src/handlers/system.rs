@@ -46,7 +46,7 @@ pub async fn get_status(app_state: web::Data<AppState>) -> Result<HttpResponse> 
     let active_scan_jobs = 0;
 
     let disk_space_mb = get_disk_space().await;
-    let uptime_str = get_uptime(app_state.start_time).await;
+    let uptime_ms = get_uptime(app_state.start_time).await;
 
     let status = SystemStatus {
         cups_available,
@@ -54,7 +54,7 @@ pub async fn get_status(app_state: web::Data<AppState>) -> Result<HttpResponse> 
         active_print_jobs,
         active_scan_jobs,
         disk_space_mb,
-        uptime_ms: uptime_str
+        uptime_ms
     };
 
     json_success(status)
@@ -154,34 +154,7 @@ pub async fn get_current_queue(job_queue: web::Data<JobQueue>, pool: web::Data<S
 async fn get_uptime(start_time: Instant) -> u128 {
     let uptime = start_time.elapsed();
     uptime.as_millis()
-    // format_duration(uptime)
 }
-
-// fn format_duration(duration: Duration) -> String {
-//     let total_seconds = duration.as_secs();
-//
-//     let days = total_seconds / 86400;
-//     let hours = (total_seconds % 86400) / 3600;
-//     let minutes = (total_seconds % 3600) / 60;
-//     let seconds = total_seconds % 60;
-//
-//     let mut parts = Vec::new();
-//
-//     if days > 0 {
-//         parts.push(format!("{}d", days));
-//     }
-//     if hours > 0 {
-//         parts.push(format!("{}h", hours));
-//     }
-//     if minutes > 0 {
-//         parts.push(format!("{}m", minutes));
-//     }
-//     if seconds > 0 || parts.is_empty() {
-//         parts.push(format!("{}s", seconds));
-//     }
-//
-//     parts.join(" ")
-// }
 
 fn was_within_last_hour(completed_at: Option<DateTime<Utc>>) -> bool {
     let completed_at = match completed_at {
