@@ -201,21 +201,21 @@ const Utils = {
         return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     },
 
-    // formatDate(timestamp) {
-    //     return new Date(timestamp * 1000).toLocaleString();
-    // },
-    //
-    // formatJobId(id) {
-    //     return `${id.substring(0, 8)}...`;
-    // },
-    //
-    // debounce(func, wait) {
-    //     let timeout;
-    //     return function executedFunction(...args) {
-    //         clearTimeout(timeout);
-    //         timeout = setTimeout(() => func(...args), wait);
-    //     };
-    // },
+    formatDate(timestamp) {
+        return new Date(timestamp * 1000).toLocaleString();
+    },
+
+    formatJobId(id) {
+        return `${id.substring(0, 8)}...`;
+    },
+
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func(...args), wait);
+        };
+    },
 
     truncateFilename(filename, maxLength = 20) {
         if (!filename || filename.length <= maxLength) return filename;
@@ -301,7 +301,6 @@ async function updateSystemStatus() {
         const status = await API.get('/system/status');
         AppState.systemStatus = status;
         AppState.uptime_ms = status.uptime_ms;
-
         updateStatusIndicator('cups-status', status.cups_available);
         updateStatusIndicator('sane-status', status.sane_available);
 
@@ -326,6 +325,9 @@ function updateStatusIndicator(elementId, isAvailable) {
 }
 
 function updateDashboardStats(status) {
+    console.log(AppState.printers)
+    console.log(AppState.scanners)
+
     const updates = {
         'active-prints': status.active_print_jobs || 0,
         'active-scans': status.active_scan_jobs || 0,
@@ -347,8 +349,6 @@ function updateDashboardStats(status) {
 // DATA LOADING
 async function loadInitialData() {
     try {
-        await updateSystemStatus();
-
         if (AppState.systemStatus?.cups_available) {
             AppState.printers = await API.get('/printers');
         }
@@ -356,6 +356,8 @@ async function loadInitialData() {
         if (AppState.systemStatus?.sane_available) {
             AppState.scanners = await API.get('/scanners');
         }
+
+        await updateSystemStatus();
     } catch (error) {
         console.error('Failed to load initial data:', error);
         Toast.error('Failed to load initial data');
@@ -803,7 +805,7 @@ function updateStatusFromSSE(status) {
 
 
 // INITIALIZATION & CLEANUP
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     Toast.init();
 
     // Setup modal handlers
@@ -819,9 +821,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Load initial data
-    loadInitialData();
-
     // Setup dashboard if on main page
     if (window.location.pathname === '/') {
         setupDashboardForms();
@@ -829,6 +828,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize SSE
     initializeSSE();
+
+    // Get system status
+    await updateSystemStatus()
+
+    // Load initial data
+    await loadInitialData()
 });
 
 window.addEventListener('beforeunload', () => {

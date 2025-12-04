@@ -184,7 +184,7 @@ function displayPrintJobs() {
                     <span class="filename" title="${job.filename}">${job.filename}</span>
                 </td>
                 <td>
-                    <span class="printer-name">${job.printer}</span>
+                    <span class="printer-name">${PrintHelpers.getPrinterDisplayName(job)}</span>
                 </td>
                 <td>
                     <span class="copies-count">${job.copies || 1}</span>
@@ -201,18 +201,18 @@ function displayPrintJobs() {
                 </td>
                 <td>
                     <span class="status-badge status-${status}">
-                        <i class="fas ${JobHelpers.getStatusIcon(status)}"></i>
+                        <i class="fas ${PrintHelpers.getStatusIcon(status)}"></i>
                         ${job.status}
                     </span>
                 </td>
                 <td>
                     <div class="progress-container">
-                        ${JobHelpers.getProgressBar(status)}
+                        ${PrintHelpers.getProgressBar(status)}
                     </div>
                 </td>
                 <td>
                     <div class="job-actions">
-                        ${JobHelpers.getActionButtons(job)}
+                        ${PrintHelpers.getActionButtons(job)}
                     </div>
                 </td>
             </tr>
@@ -242,7 +242,14 @@ async function refreshJobs() {
 
 
 // JOB HELPERS
-const JobHelpers = {
+const PrintHelpers = {
+    getPrinterDisplayName(job) {
+        const vendor = job.vendor || "Unknown";
+        const model = job.model || "Unknown";
+
+        return vendor + " " + model;
+    },
+
     getStatusIcon(status) {
         const icons = {
             'queued': 'fa-clock',
@@ -337,10 +344,10 @@ function showJobDetailsModal(job) {
             <div class="job-details">
                 ${createDetailRow('Job ID', `<code>${job.id}</code>`)}
                 ${createDetailRow('Filename', job.filename)}
-                ${createDetailRow('Printer', job.printer)}
+                ${createDetailRow('Printer', PrintHelpers.getPrinterDisplayName(job))}
                 ${createDetailRow('Status', `
                     <span class="status-badge status-${status}">
-                        <i class="fas ${JobHelpers.getStatusIcon(status)}"></i>
+                        <i class="fas ${PrintHelpers.getStatusIcon(status)}"></i>
                         ${job.status}
                     </span>
                 `)}

@@ -185,7 +185,7 @@ function displayScanJobs() {
                     </span>
                 </td>
                 <td>
-                    <span class="scanner-name">${ScanHelpers.getScannerDisplayName(job.scanner)}</span>
+                    <span class="scanner-name">${ScanHelpers.getScannerDisplayName(job)}</span>
                 </td>
                 <td>
                     <span class="format-badge format-${job.format}">${job.format.toUpperCase()}</span>
@@ -242,19 +242,11 @@ async function refreshScanJobs() {
 
 // SCAN HELPERS
 const ScanHelpers = {
-    getScannerDisplayName(deviceName) {
-        const scanner = ScanPage.scanners.find(s => s.name === deviceName);
+    getScannerDisplayName(job) {
+        const scannerVendor = job.vendor || "Unknown";
+        const scannerModel = job.model || "Unknown";
 
-        if (scanner) {
-            return `${scanner.vendor} ${scanner.model}`;
-        }
-
-        if (deviceName.includes(':')) {
-            const parts = deviceName.split(':');
-            return parts[0].toUpperCase();
-        }
-
-        return deviceName;
+        return scannerVendor + " " + scannerModel;
     },
 
     getStatusIcon(status) {
@@ -359,7 +351,7 @@ function showScanJobDetailsModal(job) {
             </div>
             <div class="job-details">
                 ${createDetailRow('Filename', `<code>${job.output_filename || 'Unnamed'}</code>`)}
-                ${createDetailRow('Scanner', ScanHelpers.getScannerDisplayName(job.scanner))}
+                ${createDetailRow('Scanner', ScanHelpers.getScannerDisplayName(job))}
                 ${createDetailRow('Status', `
                     <span class="status-badge status-${status}">
                         <i class="fas ${ScanHelpers.getStatusIcon(status)}"></i>

@@ -1,95 +1,56 @@
-[//]: # (# Print & Scan Manager)
+# Print & Scan Manager
 
-[//]: # ()
-[//]: # (<div align="center">)
+<div align="center">
 
-[//]: # ()
-[//]: # (![Rust]&#40;https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white&#41;)
+![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
+![Actix Web](https://img.shields.io/badge/actix--web-000000?style=for-the-badge&logo=actix&logoColor=white)
+![SQLite](https://img.shields.io/badge/sqlite-%2307405e.svg?style=for-the-badge&logo=sqlite&logoColor=white)
+![Raspberry Pi](https://img.shields.io/badge/-RaspberryPi-C51A4A?style=for-the-badge&logo=Raspberry-Pi)
 
-[//]: # (![Actix Web]&#40;https://img.shields.io/badge/actix--web-000000?style=for-the-badge&logo=actix&logoColor=white&#41;)
+A modern web-based print and scan management system for Raspberry Pi, turning USB-only printers/scanners into WiFi-accessible devices.
+Built with Rust and Actix-web, it offers a responsive interface for managing print jobs, scanning documents, and performing printer maintenance - all accessible from any device on your home network.
 
-[//]: # (![SQLite]&#40;https://img.shields.io/badge/sqlite-%2307405e.svg?style=for-the-badge&logo=sqlite&logoColor=white&#41;)
+</div>
 
-[//]: # (![Raspberry Pi]&#40;https://img.shields.io/badge/-RaspberryPi-C51A4A?style=for-the-badge&logo=Raspberry-Pi&#41;)
-
-[//]: # ()
-[//]: # (A modern, web-based print and scan management system designed for Raspberry Pi Zero 2W, transforming your USB-only printer/scanner into a WiFi-accessible device.)
-
-[//]: # ()
-[//]: # ([Features]&#40;#features&#41; • [Screenshots]&#40;#screenshots&#41; • [Installation]&#40;#installation&#41; • [Usage]&#40;#usage&#41; • [Architecture]&#40;#architecture&#41;)
-
-[//]: # ()
-[//]: # (</div>)
-
-[//]: # (---)
-
-## Print & Scan Manager
-
-Print & Scan Manager is a lightweight, high-performance web application that provides network access to USB printers and scanners through a Raspberry Pi. Built with Rust and Actix-web, it offers a responsive, modern interface for managing print jobs, scanning documents, and performing printer maintenance - all accessible from any device on your home network.
-
-### Why This Project?
-
-Many home printers and scanners lack WiFi connectivity, limiting their usability in modern home networks. This project solves that problem by:
-
-- Converting USB-only devices into network-accessible resources
-- Providing a clean, modern web interface accessible from any device
-- Managing print and scan jobs with persistent storage
-- Offering printer maintenance capabilities (nozzle cleaning/checking)
-- Running efficiently on low-power Raspberry Pi Zero 2W hardware
+---
 
 ## Features
 
+- **Print Management** - Upload and print PDF, DOC, DOCX, TXT, JPG, PNG with advanced options
+- **Scan Management** - Scan at 150-1200 DPI, output to PDF, JPEG, PNG, or TIFF
+- **System Control** - Monitor CUPS/SANE, printer maintenance, nozzle cleaning
+- **Job History** - SQLite database for persistent storage
+- **Web Interface** - Clean, responsive UI accessible from any device
+
+
+## Tech Stack
+
+- **Backend**: Rust + Actix-web
+- **Database**: SQLite + sqlx
+- **Frontend**: Vanilla JS, HTML5, CSS3
+- **Integration**: CUPS, SANE, ESCPUTIL
+
+## Screenshots
+
+### Dashboard
+![Dashboard](images/dashboard.png)
+*Main dashboard showing all key features: print, scan, maintenance, job queue, recent activity, and system info*
+
 ### Print Management
-- **Upload & Print** - Support for PDF, DOC, DOCX, TXT, JPG, and PNG files
-- **Multiple Printers** - Manage and select from multiple connected printers
-- **Advanced Options** - Configure copies, page ranges, duplex, color mode, and paper size
-- **Job Tracking** - Real-time monitoring of print job status and progress
-- **Job History** - View and manage completed print jobs
+![Print Management](images/print.png)
+*Complete print job management*
 
 ### Scan Management
-- **High-Quality Scanning** - Support for resolutions from 150 to 1200 DPI
-- **Multiple Formats** - Output to PDF, JPEG, PNG, or TIFF
-- **Preview & Download** - Preview scanned images before downloading
-- **Custom Settings** - Adjust color mode, brightness, contrast, and page size
-- **File Management** - Organize and download scanned documents
+![Scan Management](images/scan.png)
+*Comprehensive scan interface*
 
-### System Features
-- **Printer Maintenance** - Nozzle cleaning and checking via ESCPUTIL
-- **Real-time Status** - Monitor CUPS and SANE service availability
-- **System Information** - View disk space and uptime statistics
-- **Recent Activity** - Track recent print and scan operations
-- **SQLite Database** - Persistent job history and metadata storage
-
-
-
-## Technology Stack
-
-- **Backend**: Rust with Actix-web framework
-- **Database**: SQLite with sqlx
-- **Frontend**: Vanilla JavaScript, HTML5, CSS3
-- **System Integration**:
-    - CUPS (Common Unix Printing System)
-    - SANE (Scanner Access Now Easy)
-    - ESCPUTIL (Epson printer utility)
-
-## Installation
+## Quick Start
 
 ### Prerequisites
 
 ```bash
-# Update system packages
 sudo apt update && sudo apt upgrade -y
-
-# Install CUPS
-sudo apt install -y cups cups-client
-
-# Install SANE
-sudo apt install -y sane sane-utils
-
-# Install ESCPUTIL (for Epson printers) - necessary for maintenance
-sudo apt install -y escputil
-
-# Install Rust (if not already installed)
+sudo apt install -y cups cups-client sane sane-utils
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 ```
@@ -166,7 +127,7 @@ The application will be accessible at `http://raspberry-pi-ip:8080`
 4. Run docker
 5. Run the script
 
-### Optional: Run as System Service
+### Optional: Run as System Service on Raspberry PI
 
 1. Create a systemd service file:
     ```bash
@@ -181,9 +142,9 @@ The application will be accessible at `http://raspberry-pi-ip:8080`
     
     [Service]
     Type=simple
-    User=pi
-    WorkingDirectory=/home/pi/print-scan-manager
-    ExecStart=/home/pi/print-scan-manager/target/release/print-scan-manager
+    User=<PI username>
+    WorkingDirectory=<Path to your working directory, example "/home/pi/Web">
+    ExecStart=<Path to the execution file, example "/home/pi/Web/web_printer">
     Restart=always
     RestartSec=10
     
@@ -200,96 +161,58 @@ The application will be accessible at `http://raspberry-pi-ip:8080`
 
 ## Usage
 
-### Printing a Document
+### Printing
 
-1. Navigate to the Print page
-2. Click "New Print Job"
+1. Navigate to the **Print** page
+2. Click **New Print Job**
 3. Select your file (PDF, DOC, DOCX, TXT, JPG, PNG)
 4. Configure options:
-    - Choose printer
-    - Set number of copies
-    - Specify page range (optional)
-    - Enable duplex printing (if supported)
-    - Choose color or monochrome
-    - Select paper size
-5. Click "Start Printing"
+    - Printer selection
+    - Number of copies
+    - Page range (optional)
+    - Duplex printing (if supported)
+    - Color or monochrome mode
+    - Paper size
+5. Click **Start Printing**
 
-### Scanning a Document
+### Scanning
 
-1. Navigate to the Scan page
-2. Click "New Scan"
-3. Configure scan settings:
-    - Select scanner
-    - Choose resolution (150-1200 DPI)
-    - Select output format (PDF, JPEG, PNG, TIFF)
-    - Set color mode
-    - Adjust brightness and contrast
-    - Specify page size
-4. Click "Start Scan"
+1. Navigate to the **Scan** page
+2. Click **New Scan**
+3. Configure settings:
+    - Scanner selection
+    - Resolution (150-1200 DPI)
+    - Output format (PDF, JPEG, PNG, TIFF)
+    - Color mode
+    - Brightness & contrast
+    - Page size
+4. Click **Start Scan**
 5. Download or preview the scanned document once complete
 
 ### Printer Maintenance
 
 From the dashboard:
-- **Nozzle Check**: Prints a test pattern to verify nozzle condition
-- **Clean Nozzles**: Performs a cleaning cycle to clear clogged nozzles
-
-
-##  Configuration
-
-### Database Optimizations
-
-The application includes Pi Zero 2W-specific optimizations:
-- WAL mode for better concurrency
-- Optimized cache size
-- Indexed queries for faster lookups
-
-
-## Screenshots
-
-### Dashboard
-![Dashboard](images/dashboard.png)
-*Main dashboard showing all key features: print, scan, maintenance, recent activity, and system info*
-
-### Print Management
-![Print Management](images/print.png)
-*Complete print job management*
-
-### Scan Management
-![Scan Management](images/scan.png)
-*Comprehensive scan interface*
-
+- **Nozzle Check** - Prints a test pattern to verify nozzle condition
+- **Clean Nozzles** - Performs a cleaning cycle to clear clogged nozzles
 
 ## Project Structure
 
 ```
 print-scan-manager/
 ├── src/
-│   ├── main.rs                 # Application entry point
-│   ├── database/
-│   │   ├── mod.rs              # Database initialization
-│   │   └── migrations.rs       # Database schema migrations
-│   ├── handlers/
-│   │   ├── mod.rs              # Handler utilities
-│   │   ├── print.rs            # Print job handlers
-│   │   ├── scan.rs             # Scan job handlers
-│   │   └── system.rs           # System & maintenance handlers
-│   ├── services/
-│   │   ├── mod.rs              # Service layer
-│   │   ├── cups.rs             # CUPS integration
-│   │   ├── sane.rs             # SANE integration
-│   │   └── escputil.rs         # ESCPUTIL integration
-│   └── models/
-│       ├── mod.rs              # Model definitions
-│       ├── print_job.rs        # Print job model
-│       └── scan_job.rs         # Scan job model
+│   ├── main.rs         # Application entry point
+│   ├── database/       # SQLite setup
+│   ├── handlers/       # HTTP handlers
+│   ├── services/       # CUPS, SANE, ESCPUTIL integration
+│   ├── models/         # Job models & queue
+│   └── utils/          # Utilities
 ├── static/
-│   ├── css/                    # Stylesheets
-│   └── js/                     # Frontend JavaScript
-├── templates/                  # HTML templates
-├── uploads/                    # Temporary print file storage
-├── scans/                      # Scanned document storage
-└── data/                       # SQLite database location
+│   ├── css/            # Stylesheets
+│   └── js/             # Frontend JavaScript
+├── templates/          # HTML templates
+├── uploads/            # Temporary print file storage
+├── scans/              # Scanned document storage
+└── data/                SQLite database location
 ```
 
 ## API Endpoints
@@ -309,26 +232,19 @@ print-scan-manager/
 - `GET /api/scan/jobs/{id}` - Get specific scan job
 - `GET /api/scan/download/{id}` - Download scanned file
 - `DELETE /api/scan/jobs/{id}` - Delete scan job record
-- `DELETE /api/scan/remove/{id}` - Delete scanned file
 
 ### System Endpoints
 - `GET /api/system/status` - Get system status
-- `GET /api/system/get-recent` - Get recent activity
+- `GET /api/system/recent` - Get recent activity
 - `POST /api/system/nozzle/check` - Perform nozzle check
 - `POST /api/system/nozzle/clean` - Clean printer nozzles
 
-## Future Development
-
-### Planned Features
-
-- [ ] **Cancel In-Progress Scans** - Ability to abort scanning operations
-- [ ] **Job Queue System** 
-    - Print job queuing
-    - Scan job queuing
-- [ ] **Enhanced Database Schema**
-    - Store printer vendor and model information
-    - Store scanner vendor and model information
-- [ ] **Multi-page Scanning**
+### Events Endpoints
+- `GET /api/events/stream` - Subscribe to Server-Sent Events (SSE)
+    - Streams real-time updates about job queue and system status
+    - Event Types:
+        - `queue_update`: Contains current job queue with currently processing
+        - `status_update`: Contains system status info
 
 ## Contributing
 
@@ -350,6 +266,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [CUPS](https://www.cups.org/) - Common Unix Printing System
 - [SANE](http://www.sane-project.org/) - Scanner Access Now Easy
 - [SQLx](https://github.com/launchbadge/sqlx) - Rust SQL toolkit
-- Inspired by the need for simple, accessible home printing solutions
-
-
+- Inspired by the need for simple, accessible home printing solution
