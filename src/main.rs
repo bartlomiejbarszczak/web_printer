@@ -65,7 +65,6 @@ async fn main() -> io::Result<()> {
                     .route("/system/settings", web::post().to(system::update_settings))
                     .route("/system/nozzle/check", web::post().to(system::nozzle_check))
                     .route("/system/nozzle/clean", web::post().to(system::nozzle_clean))
-                    .route("/system/recent", web::get().to(system::get_recent_activity))
 
                     // SSE endpoint
                     .route("/events/stream", web::get().to(events::event_stream))

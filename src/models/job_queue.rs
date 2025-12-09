@@ -117,6 +117,7 @@ async fn handle_job(job_queue: &JobQueue, pool: &SqlitePool, event_state: &Event
         job_queue.set_processing_job_id(None).await;
         event_state.increment_queue_version().await;
         event_state.increment_status_version().await;
+        event_state.increment_recent_activity_version().await;
     }
 
     if let Err(e) = Box::pin(notify_scan_queue(job_queue, pool, event_state)).await {

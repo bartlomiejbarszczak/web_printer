@@ -235,7 +235,6 @@ print-scan-manager/
 
 ### System Endpoints
 - `GET /api/system/status` - Get system status
-- `GET /api/system/recent` - Get recent activity
 - `POST /api/system/nozzle/check` - Perform nozzle check
 - `POST /api/system/nozzle/clean` - Clean printer nozzles
 
@@ -245,6 +244,7 @@ print-scan-manager/
     - Event Types:
         - `queue_update`: Contains current job queue with currently processing
         - `status_update`: Contains system status info
+        - `recent_activity_update`: Contains recently completed jobs with limit of 4
 
 ## Contributing
 

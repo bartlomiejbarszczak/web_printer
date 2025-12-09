@@ -325,9 +325,6 @@ function updateStatusIndicator(elementId, isAvailable) {
 }
 
 function updateDashboardStats(status) {
-    console.log(AppState.printers)
-    console.log(AppState.scanners)
-
     const updates = {
         'active-prints': status.active_print_jobs || 0,
         'active-scans': status.active_scan_jobs || 0,
@@ -364,14 +361,14 @@ async function loadInitialData() {
     }
 }
 
-async function updateRecentActivity() {
-    try {
-        const recentJobs = await API.get('/system/recent');
-        displayRecentActivity(recentJobs);
-    } catch (error) {
-        console.error('Failed to load recent activity:', error);
-    }
-}
+// async function updateRecentActivity() {
+//     try {
+//         const recentJobs = await API.get('/system/recent');
+//         displayRecentActivity(recentJobs);
+//     } catch (error) {
+//         console.error('Failed to load recent activity:', error);
+//     }
+// }
 
 function displayRecentActivity(jobs) {
     const container = document.getElementById('recent-activity');
@@ -749,8 +746,7 @@ function initializeSSE() {
     eventSource.addEventListener('message', (event) => {
         try {
             const data = JSON.parse(event.data);
-            console.log("Received queue update:", data);
-            handleSSEMessage(data);
+            handleSSEMessage(data).then(_ => {});
         } catch (error) {
             console.error('Failed to parse SSE message:', error);
         }
@@ -766,8 +762,6 @@ function initializeSSE() {
 }
 
 async function handleSSEMessage(data) {
-    await updateRecentActivity();
-
     switch (data.type) {
         case 'queue_update':
             if (window.location.pathname === '/') {
@@ -776,11 +770,17 @@ async function handleSSEMessage(data) {
             break;
 
         case 'status_update':
-            updateStatusFromSSE(data.status);
+            if (window.location.pathname === '/') {
+                updateStatusFromSSE(data.status);
+            }
+
             break;
 
-        case 'recent_activity':
-            console.log("Recent activity update not implemented");
+        case 'recent_activity_update':
+            if (window.location.pathname === '/') {
+                displayRecentActivity(data.recent_activity);
+            }
+
             break;
 
         default:

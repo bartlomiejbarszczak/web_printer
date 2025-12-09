@@ -6,7 +6,7 @@ use sqlx::SqlitePool;
 use tokio::time::{Instant};
 
 use crate::handlers::{json_success, internal_error, json_error};
-use crate::models::{AppState, PrintJob, ScanJob, SystemStatus, Job, JobQueue};
+use crate::models::{AppState, PrintJob, ScanJob, SystemStatus, Job};
 use crate::services::cups::CupsService;
 use crate::services::sane::SaneService;
 use crate::services::escputil::MaintenanceService;
@@ -81,36 +81,6 @@ pub async fn update_settings() -> Result<HttpResponse> {
     internal_error("Not implemented".to_string())
 }
 
-
-/// GET /api/system/recent - Get recent 5 jobs
-pub async fn get_recent_activity(pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
-    let limit = 4;
-
-    let (scan_jobs_r, print_jobs_r) = tokio::try_join!(
-        ScanJob::get_recent(limit, &pool),
-        PrintJob::get_recent(limit, &pool)
-    ).map_err(|e| {
-        log::error!("Error getting recent activity: {}", e);
-        ErrorInternalServerError(e)
-    })?;
-
-    let mut recent_jobs = scan_jobs_r.iter()
-        .map(|sj| Job::Scan(sj.clone()))
-        .chain(
-            print_jobs_r.iter()
-                .map(|pj| Job::Print(pj.clone())))
-        .filter(|x| was_within_last_hour(x.completed_at()))
-        .collect::<Vec<Job>>();
-
-    recent_jobs.sort();
-    recent_jobs.reverse();
-
-    let recent_jobs = recent_jobs.into_iter().take(limit as usize).collect::<Vec<Job>>();
-
-    log::info!("Successfully updated recent activity");
-    json_success(recent_jobs)
-}
-
 /// POST /api/system/nozzle/check
 pub async fn nozzle_check() -> Result<HttpResponse> {
     let service = MaintenanceService::new();
@@ -142,28 +112,8 @@ pub async fn nozzle_clean() -> Result<HttpResponse> {
 }
 
 
-/// GET /api/system/queue
-pub async fn get_current_queue(job_queue: web::Data<JobQueue>, pool: web::Data<SqlitePool>) -> Result<HttpResponse> {
-    let jq = job_queue.get_ref();
-    let data = jq.get_current_queue(&pool).await;
-    
-    json_success(data)
-}
-
 /// Helper function to get current uptime
 async fn get_uptime(start_time: Instant) -> u128 {
     let uptime = start_time.elapsed();
     uptime.as_millis()
-}
-
-fn was_within_last_hour(completed_at: Option<DateTime<Utc>>) -> bool {
-    let completed_at = match completed_at {
-        Some(com) => com,
-        None => return false,
-    };
-
-    let now = Utc::now();
-    let one_hour_ago = now - chrono::Duration::hours(1);
-
-    completed_at >= one_hour_ago && completed_at <= now
 }

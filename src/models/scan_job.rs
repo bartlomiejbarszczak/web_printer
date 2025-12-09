@@ -194,8 +194,10 @@ impl ScanJob {
             ScanFormat::Tiff => "tiff",
         };
 
-        let filename = request.filename.and_then(|s| Some(add_missing_extension(&s, extension)))
+        let mut filename = request.filename.and_then(|s| Some(add_missing_extension(&s, extension)))
             .unwrap_or_else(|| format!("scan_{}_{}.{}", Utc::now().format("%Y%m%d_%H%M%S"), &id.to_string()[..8], extension));
+
+        validate_filename(&mut filename);
 
         Self {
             id,
@@ -443,6 +445,74 @@ fn add_missing_extension(filename: &str, extension: &str) -> String {
     let ext = extension.trim_start_matches('.');
 
     format!("{}.{}", filename, ext)
+}
+
+
+fn is_file_existing(filename: &str) -> bool {
+    let filepath = format!("scans/{}", filename);
+    let path = Path::new(filepath.as_str());
+
+    match path.try_exists() {
+        Ok(true) => {
+            path.is_file()
+        }
+        Ok(false) => {
+            false
+        }
+        _ => {
+            log::warn!("Error during checking file: {}", filepath);
+            false
+        }
+    }
+}
+
+fn validate_filename(filename: &mut String) -> &mut String {
+    let mut is_first_encounter = true;
+    loop {
+        match is_file_existing(&filename) {
+            true => {
+                let index = filename.find('.').unwrap();
+                let mut count = 0;
+                if let Some(slice) = filename.split('_').last() {
+                    let number = slice
+                        .split('.')
+                        .take(1).collect::<String>()
+                        .parse::<i32>().unwrap_or_else(|e| {
+                        log::warn!("Could not parse the string {}", e); 0});
+
+                    count = number + 1i32;
+                }
+                if is_first_encounter {
+                    filename.insert_str(index, format!("_{count}").as_str());
+                    is_first_encounter = false;
+                } else {
+                    let start = filename.find('_').unwrap();
+                    let end = filename.find('.').unwrap();
+                    filename.replace_range(start..end, format!("_{count}").as_str());
+                }
+            },
+            false => break
+        }
+    }
+
+    filename
+}
+
+
+
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validating_filename_test_existing() {
+        let mut test_filename = String::from("scan.png");
+
+        validate_filename(&mut test_filename);
+
+        assert_eq!(test_filename, String::from("scan_2.png"));
+
+    }
 }
 
 
