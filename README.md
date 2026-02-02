@@ -41,7 +41,7 @@ Built with Rust and Actix-web, it offers a responsive interface for managing pri
 *Complete print job management*
 
 ### Scan Management
-![Scan Management](images/scan.png)
+![Scan Management](images/scan.png  )
 *Comprehensive scan interface*
 
 ## Quick Start

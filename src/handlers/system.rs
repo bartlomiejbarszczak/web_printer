@@ -1,12 +1,10 @@
 use actix_web::{web, HttpResponse, Result};
 use actix_files::NamedFile;
 use actix_web::error::ErrorInternalServerError;
-use chrono::{DateTime, Utc};
-use sqlx::SqlitePool;
 use tokio::time::{Instant};
 
 use crate::handlers::{json_success, internal_error, json_error};
-use crate::models::{AppState, PrintJob, ScanJob, SystemStatus, Job};
+use crate::models::{AppState, SystemStatus};
 use crate::services::cups::CupsService;
 use crate::services::sane::SaneService;
 use crate::services::escputil::MaintenanceService;
