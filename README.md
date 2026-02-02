@@ -33,15 +33,15 @@ Built with Rust and Actix-web, it offers a responsive interface for managing pri
 ## Screenshots
 
 ### Dashboard
-<img alt="Dashboard" src="images/dashboard.jpg"/>
+![Dashboard](assets/dashboard.png)
 *Main dashboard showing all key features: print, scan, maintenance, job queue, recent activity, and system info*
 
 ### Print Management
-<img alt="Print Management" src="images/print.jpg"/>
+![Print Management](assets/print.png)
 *Complete print job management*
 
 ### Scan Management
-<img alt="Scan Management" src="images/scan.jpg"/>
+![Scan Management](assets/scan.png)
 *Comprehensive scan interface*
 
 ## Quick Start
